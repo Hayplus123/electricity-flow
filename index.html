@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Canada Electricity Flow & Real-Time Grid Monitor</title>
+  <title>Canada Electricity Grid Flow & GW Monitor</title>
   
   <!-- Tailwind CSS & Chart.js -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -38,12 +38,12 @@
           </svg>
         </div>
         <div>
-          <h1 class="text-xl font-bold tracking-tight">Canada Live Grid Monitor & Audio Alarms</h1>
-          <p class="text-xs text-slate-400">Open Data Integration & Autonomous Telemetry Feed</p>
+          <h1 class="text-xl font-bold tracking-tight">Canada Electricity GW Flow & Audio Monitor</h1>
+          <p class="text-xs text-slate-400">Open Data Integration & Live Telemetry Feed</p>
         </div>
       </div>
 
-      <!-- Audio & Control Panel -->
+      <!-- Audio Toggle Button -->
       <div class="flex items-center space-x-3">
         <div id="liveIndicator" class="flex items-center space-x-2 bg-emerald-950/60 border border-emerald-800 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-semibold">
           <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
@@ -65,6 +65,25 @@
     <!-- Left Column: Map & Alarm Status Banner -->
     <div class="lg:col-span-2 flex flex-col gap-6">
       
+      <!-- GW Stats Metric Cards -->
+      <div class="grid grid-cols-3 gap-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
+          <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Current Power Output</p>
+          <h3 id="currentGWText" class="text-2xl font-black text-emerald-400 mt-1">160.0 GW</h3>
+          <span class="text-[10px] text-slate-500">Live Calculated Flow</span>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
+          <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Installed Capacity</p>
+          <h3 class="text-2xl font-black text-sky-400 mt-1">160.0 GW</h3>
+          <span class="text-[10px] text-slate-500">National Grid Max</span>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
+          <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Capacity Load Factor</p>
+          <h3 id="capacityPercentText" class="text-2xl font-black text-emerald-400 mt-1">100%</h3>
+          <span class="text-[10px] text-slate-500">Operational Level</span>
+        </div>
+      </div>
+
       <!-- Alarm Status Banner -->
       <div id="alarmBanner" class="p-4 rounded-xl border flex items-center justify-between bg-emerald-950/60 border-emerald-800 text-emerald-200 shadow-lg">
         <div class="flex items-center space-x-3">
@@ -133,32 +152,32 @@
 
       <!-- Flow Simulator & Manual Override -->
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
-        <h2 class="text-lg font-semibold text-slate-200 mb-2">Grid Flow Control Bench</h2>
-        <p class="text-xs text-slate-400 mb-4">Test sound alert modes or let live auto-updating manage flow.</p>
+        <h2 class="text-lg font-semibold text-slate-200 mb-2">Grid Flow & GW Control Bench</h2>
+        <p class="text-xs text-slate-400 mb-4">Adjust power output in Gigawatts (GW) to trigger audio alarms.</p>
         
         <div class="space-y-4">
           <div>
             <div class="flex justify-between text-sm mb-1">
-              <span class="text-slate-400">Current Grid Flow Level:</span>
-              <span id="flowValueText" class="font-bold text-emerald-400">100% (Normal)</span>
+              <span class="text-slate-400">Current Grid Flow Output:</span>
+              <span id="flowValueText" class="font-bold text-emerald-400">160.0 GW (100%)</span>
             </div>
-            <input type="range" id="flowSlider" min="0" max="100" value="100" step="1" oninput="manualOverrideFlow(this.value)" class="w-full accent-blue-500 bg-slate-800 rounded-lg h-2 cursor-pointer">
+            <input type="range" id="flowSlider" min="0" max="160" value="160" step="1" oninput="manualOverrideGW(this.value)" class="w-full accent-blue-500 bg-slate-800 rounded-lg h-2 cursor-pointer">
           </div>
 
           <!-- Quick Test Presets -->
           <div class="grid grid-cols-4 gap-2 text-xs font-medium">
-            <button onclick="setPreset(100)" class="py-2 bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded">Normal</button>
-            <button onclick="setPreset(75)" class="py-2 bg-yellow-950/60 hover:bg-yellow-900 text-yellow-300 border border-yellow-800 rounded">Below (5s)</button>
-            <button onclick="setPreset(50)" class="py-2 bg-orange-950/60 hover:bg-orange-900 text-orange-300 border border-orange-800 rounded">Low (Rapid)</button>
-            <button onclick="setPreset(0)" class="py-2 bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800 rounded">Down (Flat)</button>
+            <button onclick="setGWPreset(160)" class="py-2 bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded">160 GW (Normal)</button>
+            <button onclick="setGWPreset(120)" class="py-2 bg-yellow-950/60 hover:bg-yellow-900 text-yellow-300 border border-yellow-800 rounded">120 GW (5s Beep)</button>
+            <button onclick="setGWPreset(80)" class="py-2 bg-orange-950/60 hover:bg-orange-900 text-orange-300 border border-orange-800 rounded">80 GW (Rapid)</button>
+            <button onclick="setGWPreset(0)" class="py-2 bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800 rounded">0 GW (Flatline)</button>
           </div>
         </div>
       </div>
 
       <!-- National Generation Fuel Mix Chart -->
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
-        <h2 class="text-lg font-semibold text-slate-200 mb-4">National Generation Breakdown</h2>
-        <div class="w-full aspect-square max-h-[220px] mx-auto">
+        <h2 class="text-lg font-semibold text-slate-200 mb-4">National Generation Fuel Mix</h2>
+        <div class="w-full aspect-square max-h-[200px] mx-auto">
           <canvas id="generationChart"></canvas>
         </div>
       </div>
@@ -167,10 +186,14 @@
   </main>
 
   <script>
+    // System Capacity Baseline
+    const TOTAL_NATIONAL_CAPACITY_GW = 160.0;
+
     // Audio Context & State
     let audioCtx = null;
     let isAudioEnabled = false;
     let currentFlowPercent = 100;
+    let currentGW = 160.0;
     let alarmInterval = null;
     let flatlineOscillator = null;
     let flatlineGain = null;
@@ -179,14 +202,14 @@
 
     window.addEventListener('DOMContentLoaded', () => {
       initChart();
-      updateFlowLevel(100, false);
+      updateFlowGW(160.0);
 
       // Autonomous Live Updating Loop (updates every 6 seconds)
       setInterval(() => {
         if (!isManualOverride) {
-          // Simulate minor live grid variations between 88% and 100%
-          const simulatedLiveFlow = Math.floor(Math.random() * 13) + 88;
-          updateFlowLevel(simulatedLiveFlow, true);
+          // Simulate minor live grid variations between 140 GW and 160 GW
+          const simulatedLiveGW = (Math.random() * (160 - 140) + 140).toFixed(1);
+          updateFlowGW(simulatedLiveGW);
         }
       }, 6000);
     });
@@ -217,7 +240,7 @@
       }
     }
 
-    // Single Beep Tone Generator
+    // Single Beep Generator
     function playBeep(freq = 440, duration = 0.18, type = 'sine') {
       if (!isAudioEnabled || !audioCtx) return;
       try {
@@ -240,7 +263,7 @@
       }
     }
 
-    // Continuous Non-Stop Flatline Alarm (Grid Down - Zero Pulse)
+    // Non-Stop Flatline Alarm (Grid Down - Zero Pulse)
     function startFlatline() {
       if (!isAudioEnabled || !audioCtx || flatlineOscillator) return;
       try {
@@ -248,7 +271,7 @@
         flatlineGain = audioCtx.createGain();
 
         flatlineOscillator.type = 'sawtooth';
-        flatlineOscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // High continuous alarm pitch
+        flatlineOscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
 
         flatlineGain.gain.setValueAtTime(0.18, audioCtx.currentTime);
 
@@ -293,10 +316,10 @@
       banner.className = "p-4 rounded-xl border flex items-center justify-between shadow-lg transition-all";
 
       if (currentFlowPercent >= 85) {
-        // Normal Flow -> No Alarm
+        // Normal Flow -> Silent
         banner.classList.add('bg-emerald-950/60', 'border-emerald-800', 'text-emerald-200');
         dot.className = "w-4 h-4 rounded-full bg-emerald-400";
-        title.innerText = "System Operating Normally";
+        title.innerText = `System Operating Normally (${currentGW} GW)`;
         desc.innerText = "Inter-provincial transmission lines and capacity levels are optimal.";
         badge.className = "px-3 py-1 text-xs font-bold rounded uppercase bg-emerald-900 text-emerald-300";
         badge.innerText = "Optimal";
@@ -305,7 +328,7 @@
         // Below Normal -> Beep every 5 seconds
         banner.classList.add('bg-yellow-950/60', 'border-yellow-800', 'text-yellow-200');
         dot.className = "w-4 h-4 rounded-full bg-yellow-400";
-        title.innerText = "Flow Below Normal";
+        title.innerText = `Flow Below Normal (${currentGW} GW)`;
         desc.innerText = "Alert: Grid throughput down. Beeping once every 5 seconds.";
         badge.className = "px-3 py-1 text-xs font-bold rounded uppercase bg-yellow-900 text-yellow-300";
         badge.innerText = "Below Normal";
@@ -316,10 +339,10 @@
         }, 5000);
       } 
       else if (currentFlowPercent > 0 && currentFlowPercent < 65) {
-        // Low Flow -> Rapid Beep
+        // Low Flow -> Rapid Beep (Every 1.5s)
         banner.classList.add('bg-orange-950/60', 'border-orange-800', 'text-orange-200');
         dot.className = "w-4 h-4 rounded-full bg-orange-400 pulse-red";
-        title.innerText = "Warning: Low Grid Capacity";
+        title.innerText = `Warning: Low Grid Capacity (${currentGW} GW)`;
         desc.innerText = "Critical deficit detected. Rapid warning beeps active.";
         badge.className = "px-3 py-1 text-xs font-bold rounded uppercase bg-orange-900 text-orange-300";
         badge.innerText = "Low Flow";
@@ -332,10 +355,10 @@
         alarmInterval = setInterval(rapidBeep, 1500);
       } 
       else {
-        // Grid Down -> Non-stop continuous flatline tone (no pause)
+        // Grid Down (0 GW) -> Non-stop continuous flatline tone (no pause)
         banner.classList.add('bg-red-950/60', 'border-red-800', 'text-red-200', 'pulse-red');
         dot.className = "w-4 h-4 rounded-full bg-red-500";
-        title.innerText = "CRITICAL ALERT: GRID FLOW DOWN";
+        title.innerText = "CRITICAL ALERT: GRID FLOW DOWN (0.0 GW)";
         desc.innerText = "Total line interruption / zero pulse state. Continuous flatline tone active.";
         badge.className = "px-3 py-1 text-xs font-bold rounded uppercase bg-red-900 text-red-300";
         badge.innerText = "GRID DOWN";
@@ -344,41 +367,57 @@
       }
     }
 
-    // Update Flow Values & UI
-    function updateFlowLevel(val, isAuto = false) {
-      currentFlowPercent = parseInt(val);
+    // Update GW Flow & Metrics
+    function updateFlowGW(valGW) {
+      currentGW = parseFloat(valGW).toFixed(1);
+      currentFlowPercent = Math.round((currentGW / TOTAL_NATIONAL_CAPACITY_GW) * 100);
+
       const textElem = document.getElementById('flowValueText');
-      document.getElementById('flowSlider').value = val;
+      const gwElem = document.getElementById('currentGWText');
+      const capPercentElem = document.getElementById('capacityPercentText');
+
+      document.getElementById('flowSlider').value = Math.round(currentGW);
+
+      gwElem.innerText = `${currentGW} GW`;
+      capPercentElem.innerText = `${currentFlowPercent}%`;
 
       const timeString = new Date().toLocaleTimeString();
       document.getElementById('timestampText').innerText = `Last Updated: ${timeString}`;
 
-      if (val >= 85) {
-        textElem.innerText = `${val}% (Normal)`;
+      if (currentFlowPercent >= 85) {
+        textElem.innerText = `${currentGW} GW (${currentFlowPercent}% - Normal)`;
         textElem.className = "font-bold text-emerald-400";
-      } else if (val >= 65) {
-        textElem.innerText = `${val}% (Below Normal - 5s Beep)`;
+        gwElem.className = "text-2xl font-black text-emerald-400 mt-1";
+        capPercentElem.className = "text-2xl font-black text-emerald-400 mt-1";
+      } else if (currentFlowPercent >= 65) {
+        textElem.innerText = `${currentGW} GW (${currentFlowPercent}% - 5s Beep)`;
         textElem.className = "font-bold text-yellow-400";
-      } else if (val > 0) {
-        textElem.innerText = `${val}% (Low Flow - Rapid Beep)`;
+        gwElem.className = "text-2xl font-black text-yellow-400 mt-1";
+        capPercentElem.className = "text-2xl font-black text-yellow-400 mt-1";
+      } else if (currentFlowPercent > 0) {
+        textElem.innerText = `${currentGW} GW (${currentFlowPercent}% - Rapid Beep)`;
         textElem.className = "font-bold text-orange-400";
+        gwElem.className = "text-2xl font-black text-orange-400 mt-1";
+        capPercentElem.className = "text-2xl font-black text-orange-400 mt-1";
       } else {
-        textElem.innerText = `0% (GRID DOWN - Flatline Tone)`;
+        textElem.innerText = `0.0 GW (0% - GRID DOWN / Flatline)`;
         textElem.className = "font-bold text-red-500 pulse-red";
+        gwElem.className = "text-2xl font-black text-red-500 mt-1 pulse-red";
+        capPercentElem.className = "text-2xl font-black text-red-500 mt-1 pulse-red";
       }
 
-      updateLinesVisual(val);
+      updateLinesVisual(currentFlowPercent);
       evaluateAlarmState();
     }
 
-    function manualOverrideFlow(val) {
+    function manualOverrideGW(valGW) {
       isManualOverride = true;
-      updateFlowLevel(val, false);
+      updateFlowGW(valGW);
     }
 
-    function setPreset(val) {
+    function setGWPreset(valGW) {
       isManualOverride = true;
-      updateFlowLevel(val, false);
+      updateFlowGW(valGW);
     }
 
     function updateLinesVisual(val) {
@@ -403,7 +442,7 @@
       });
     }
 
-    // Chart.js Generation Mix Setup
+    // Chart.js Setup
     function initChart() {
       const ctx = document.getElementById('generationChart').getContext('2d');
       genChart = new Chart(ctx, {
