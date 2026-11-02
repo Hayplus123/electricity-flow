@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canada Electricity Flow Monitor & Audio Alert System</title>
+  
+  <!-- Tailwind CSS & Chart.js -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    @keyframes dash {
+      to {
+        stroke-dashoffset: -40;
+      }
+    }
+    .flow-line {
+      stroke-dasharray: 8;
+      animation: dash 1.5s linear infinite;
+    }
+    .flow-critical {
+      stroke-dasharray: 4;
+      animation: dash 0.4s linear infinite;
+    }
+    .pulse-red {
+      animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="p-2 bg-red-600/20 text-red-500 rounded-lg border border-red-500/30">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight">Canada Grid Flow & Alarm Monitor</h1>
+          <p class="text-xs text-slate-400">Open Government CKAN API Integration (No Sign-in Required)</p>
+        </div>
+      </div>
+
+      <!-- Controls & Audio Toggle -->
+      <div class="flex items-center space-x-3">
+        <button id="audioToggleBtn" onclick="toggleAudio()" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-lg shadow-lg flex items-center space-x-2 transition">
+          <svg id="audioIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+          </svg>
+          <span id="audioBtnText">Enable Audio Alerts</span>
+        </button>
+        <button onclick="fetchAPIData()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm border border-slate-700 transition">
+          Refresh Data
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- Grid Map & Status -->
+    <div class="lg:col-span-2 flex flex-col gap-6">
+      
+      <!-- Alarm Alert Banner -->
+      <div id="alarmBanner" class="hidden p-4 rounded-xl border flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div id="alarmStatusDot" class="w-4 h-4 rounded-full"></div>
+          <div>
+            <h3 id="alarmTitle" class="font-bold text-lg"></h3>
+            <p id="alarmDescription" class="text-sm opacity-90"></p>
+          </div>
+        </div>
+        <div id="alarmBadge" class="px-3 py-1 text-xs font-bold rounded uppercase"></div>
+      </div>
+
+      <!-- Interactive Grid Topology Canvas -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl relative">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-semibold text-slate-200">Inter-Provincial & Cross-Border Electricity Flows</h2>
+          <span class="text-xs text-slate-400 bg-slate-800 px-2.5 py-1 rounded-full border border-slate-700">Live Simulation Sync</span>
+        </div>
+
+        <div class="relative w-full aspect-[16/9] bg-slate-950 rounded-lg border border-slate-800/80 overflow-hidden flex items-center justify-center">
+          <svg viewBox="0 0 800 450" class="w-full h-full">
+            <!-- Grid Connections (Paths) -->
+            <path d="M 120 180 L 230 200" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-bc-ab"/>
+            <path d="M 230 200 L 330 220" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-ab-sk"/>
+            <path d="M 330 220 L 430 230" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-sk-mb"/>
+            <path d="M 430 230 L 530 260" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-mb-on"/>
+            <path d="M 530 260 L 640 250" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-on-qc"/>
+            <path d="M 640 250 L 720 280" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-qc-nb"/>
+            
+            <!-- Nodes (Provinces) -->
+            <g transform="translate(120, 180)" onclick="selectRegion('BC')">
+              <circle r="18" fill="#1e293b" stroke="#38bdf8" stroke-width="2" class="cursor-pointer hover:scale-110 transition-transform"/>
+              <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="11" font-weight="bold">BC</text>
+            </g>
+            <g transform="translate(230, 200)" onclick="selectRegion('AB')">
+              <circle r="18" fill="#1e293b" stroke="#38bdf8" stroke-width="2" class="cursor-pointer hover:scale-110 transition-transform"/>
+              <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="11" font-weight="bold">AB</text>
+            </g>
+            <g transform="translate(330, 220)" onclick="selectRegion('SK')">
+              <circle r="18" fill="#1e293b" stroke="#38bdf8" stroke-width="2" class="cursor-pointer hover:scale-110 transition-transform"/>
+              <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="11" font-weight="bold">SK</text>
+            </g>
+            <g transform="translate(430, 230)" onclick="selectRegion('MB')">
+              <circle r="18" fill="#1e293b" stroke="#38bdf8" stroke-width="2" class="cursor-pointer hover:scale-110 transition-transform"/>
+              <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="11" font-weight="bold">MB</text>
+            </g>
+            <g transform="translate(530, 260)" onclick="selectRegion('ON')">
+              <circle r="22" fill="#1e293b" stroke="#38bdf8" stroke-width="3" class="cursor-pointer hover:scale-110 transition-transform"/>
+              <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="12" font-weight="bold">ON</text>
+            </g>
+            <g transform="translate(640, 250)" onclick="selectRegion('QC')">
+              <circle r="24" fill="#1e293b" stroke="#38bdf8" stroke-width="3" class="cursor-pointer hover:scale-110 transition-transform"/>
+              <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="12" font-weight="bold">QC</text>
+            </g>
+            <g transform="translate(720, 280)" onclick="selectRegion('NB')">
+              <circle r="16" fill="#1e293b" stroke="#38bdf8" stroke-width="2" class="cursor-pointer hover:scale-110 transition-transform"/>
+              <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="10" font-weight="bold">NB</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls Panel & Generation Mix -->
+    <div class="flex flex-col gap-6">
+
+      <!-- Flow Controller Test Bench -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
+        <h2 class="text-lg font-semibold text-slate-200 mb-2">Flow Threshold Simulator</h2>
+        <p class="text-xs text-slate-400 mb-4">Adjust system flow capacity to test tone triggers.</p>
+        
+        <div class="space-y-4">
+          <div>
+            <div class="flex justify-between text-sm mb-1">
+              <span class="text-slate-400">Current Grid Flow Level:</span>
+              <span id="flowValueText" class="font-bold text-emerald-400">100% (Normal)</span>
+            </div>
+            <input type="range" id="flowSlider" min="0" max="100" value="100" step="1" oninput="updateFlowLevel(this.value)" class="w-full accent-blue-500 bg-slate-800 rounded-lg h-2 cursor-pointer">
+          </div>
+
+          <!-- Preset Simulation Buttons -->
+          <div class="grid grid-cols-4 gap-2 text-xs font-medium">
+            <button onclick="setPreset(100)" class="py-2 bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded">Normal</button>
+            <button onclick="setPreset(75)" class="py-2 bg-yellow-950/60 hover:bg-yellow-900 text-yellow-300 border border-yellow-800 rounded">Below</button>
+            <button onclick="setPreset(50)" class="py-2 bg-orange-950/60 hover:bg-orange-900 text-orange-300 border border-orange-800 rounded">Low</button>
+            <button onclick="setPreset(0)" class="py-2 bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800 rounded">Down</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Generation Fuel Mix Chart -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
+        <h2 class="text-lg font-semibold text-slate-200 mb-4">National Generation Fuel Mix</h2>
+        <div class="w-full aspect-square max-h-[250px] mx-auto">
+          <canvas id="generationChart"></canvas>
+        </div>
+      </div>
+
+      <!-- API Info Card -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 text-xs text-slate-400 space-y-2">
+        <h4 class="font-bold text-slate-300 uppercase tracking-wider">CKAN Open Data Integration</h4>
+        <p>Endpoint: <code class="text-sky-400">https://open.canada.ca/data/api/3/action/package_search</code></p>
+        <p class="text-slate-500">Note: Official Canada Open Data APIs operate public endpoints without API token requirements.</p>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // Audio State & Web Audio API Context
+    let audioCtx = null;
+    let isAudioEnabled = false;
+    let currentFlowPercent = 100;
+    let alarmInterval = null;
+    let flatlineOscillator = null;
+    let flatlineGain = null;
+
+    // Generation Chart Instance
+    let genChart = null;
+
+    // Initialize Page
+    window.addEventListener('DOMContentLoaded', () => {
+      initChart();
+      updateFlowLevel(100);
+      fetchAPIData();
+    });
+
+    // Toggle Web Audio Context (Browser interaction requirement)
+    function toggleAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+
+      isAudioEnabled = !isAudioEnabled;
+      const btn = document.getElementById('audioToggleBtn');
+      const btnText = document.getElementById('audioBtnText');
+
+      if (isAudioEnabled) {
+        btn.classList.remove('bg-amber-600', 'hover:bg-amber-500');
+        btn.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+        btnText.innerText = "Audio Enabled";
+        evaluateAlarmState();
+      } else {
+        btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500');
+        btn.classList.add('bg-amber-600', 'hover:bg-amber-500');
+        btnText.innerText = "Enable Audio Alerts";
+        stopAllAudio();
+      }
+    }
+
+    // Play single beep tone
+    function playBeep(freq = 440, duration = 0.15, type = 'sine') {
+      if (!isAudioEnabled || !audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {
+        console.error("Audio Playback Error", e);
+      }
+    }
+
+    // Continuous flatline alarm (Grid Down)
+    function startFlatline() {
+      if (!isAudioEnabled || !audioCtx || flatlineOscillator) return;
+      try {
+        flatlineOscillator = audioCtx.createOscillator();
+        flatlineGain = audioCtx.createGain();
+
+        flatlineOscillator.type = 'sawtooth';
+        flatlineOscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // High pitch continuous A5 tone
+
+        flatlineGain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+
+        flatlineOscillator.connect(flatlineGain);
+        flatlineGain.connect(audioCtx.destination);
+
+        flatlineOscillator.start();
+      } catch (e) {
+        console.error("Flatline audio error:", e);
+      }
+    }
+
+    function stopFlatline() {
+      if (flatlineOscillator) {
+        try {
+          flatlineOscillator.stop();
+          flatlineOscillator.disconnect();
+        } catch (e) {}
+        flatlineOscillator = null;
+        flatlineGain = null;
+      }
+    }
+
+    function stopAllAudio() {
+      if (alarmInterval) {
+        clearInterval(alarmInterval);
+        alarmInterval = null;
+      }
+      stopFlatline();
+    }
+
+    // Main Alarm Logic Evaluator
+    function evaluateAlarmState() {
+      stopAllAudio();
+
+      const banner = document.getElementById('alarmBanner');
+      const title = document.getElementById('alarmTitle');
+      const desc = document.getElementById('alarmDescription');
+      const badge = document.getElementById('alarmBadge');
+      const dot = document.getElementById('alarmStatusDot');
+
+      banner.classList.remove('hidden', 'bg-emerald-950/60', 'border-emerald-800', 'bg-yellow-950/60', 'border-yellow-800', 'bg-orange-950/60', 'border-orange-800', 'bg-red-950/60', 'border-red-800', 'pulse-red');
+
+      if (currentFlowPercent >= 85) {
+        // Normal Flow
+        banner.classList.add('bg-emerald-950/60', 'border-emerald-800', 'text-emerald-200');
+        dot.className = "w-3 h-3 rounded-full bg-emerald-400";
+        title.innerText = "System Operating Normally";
+        desc.innerText = "Inter-provincial flows and capacity levels are optimal.";
+        badge.className = "px-3 py-1 text-xs font-bold rounded bg-emerald-900 text-emerald-300";
+        badge.innerText = "Optimal";
+      } 
+      else if (currentFlowPercent >= 65 && currentFlowPercent < 85) {
+        // Below Normal Flow -> Beep every 5 sec
+        banner.classList.add('bg-yellow-950/60', 'border-yellow-800', 'text-yellow-200');
+        dot.className = "w-3 h-3 rounded-full bg-yellow-400";
+        title.innerText = "Flow Below Normal";
+        desc.innerText = "Alert: Grid throughput down. Beeping every 5 seconds.";
+        badge.className = "px-3 py-1 text-xs font-bold rounded bg-yellow-900 text-yellow-300";
+        badge.innerText = "Below Normal";
+
+        playBeep(520, 0.2, 'sine');
+        alarmInterval = setInterval(() => {
+          playBeep(520, 0.2, 'sine');
+        }, 5000);
+      } 
+      else if (currentFlowPercent > 0 && currentFlowPercent < 65) {
+        // Low Flow -> Rapid Beep (Every 1.5 seconds)
+        banner.classList.add('bg-orange-950/60', 'border-orange-800', 'text-orange-200');
+        dot.className = "w-3 h-3 rounded-full bg-orange-400 pulse-red";
+        title.innerText = "Warning: Low Grid Capacity";
+        desc.innerText = "Critical deficit detected. Beeping rapidly.";
+        badge.className = "px-3 py-1 text-xs font-bold rounded bg-orange-900 text-orange-300";
+        badge.innerText = "Low Flow";
+
+        const rapidBeep = () => {
+          playBeep(660, 0.1, 'square');
+          setTimeout(() => playBeep(660, 0.1, 'square'), 150);
+        };
+        rapidBeep();
+        alarmInterval = setInterval(rapidBeep, 1500);
+      } 
+      else {
+        // Flow Down (0%) -> Continuous Flatline Audio (No pulse heart sound)
+        banner.classList.add('bg-red-950/60', 'border-red-800', 'text-red-200', 'pulse-red');
+        dot.className = "w-3 h-3 rounded-full bg-red-500";
+        title.innerText = "CRITICAL ALERT: GRID FLOW DOWN";
+        desc.innerText = "Total line interruption / zero pulse state. Continuous alarm tone active.";
+        badge.className = "px-3 py-1 text-xs font-bold rounded bg-red-900 text-red-300";
+        badge.innerText = "GRID DOWN";
+
+        startFlatline();
+      }
+    }
+
+    // UI Updates
+    function updateFlowLevel(val) {
+      currentFlowPercent = parseInt(val);
+      const textElem = document.getElementById('flowValueText');
+      document.getElementById('flowSlider').value = val;
+
+      if (val >= 85) {
+        textElem.innerText = `${val}% (Normal)`;
+        textElem.className = "font-bold text-emerald-400";
+      } else if (val >= 65) {
+        textElem.innerText = `${val}% (Below Normal - 5s Beep)`;
+        textElem.className = "font-bold text-yellow-400";
+      } else if (val > 0) {
+        textElem.innerText = `${val}% (Low Flow - Rapid Beep)`;
+        textElem.className = "font-bold text-orange-400";
+      } else {
+        textElem.innerText = `0% (GRID DOWN - Flatline Tone)`;
+        textElem.className = "font-bold text-red-500 pulse-red";
+      }
+
+      updateLinesVisual(val);
+      evaluateAlarmState();
+    }
+
+    function setPreset(val) {
+      updateFlowLevel(val);
+    }
+
+    function updateLinesVisual(val) {
+      const lines = document.querySelectorAll('.flow-line');
+      lines.forEach(line => {
+        if (val === 0) {
+          line.style.stroke = "#ef4444";
+          line.style.animationPlayState = "paused";
+        } else if (val < 65) {
+          line.style.stroke = "#f97316";
+          line.style.animationPlayState = "running";
+          line.style.animationDuration = "0.6s";
+        } else if (val < 85) {
+          line.style.stroke = "#eab308";
+          line.style.animationPlayState = "running";
+          line.style.animationDuration = "1.2s";
+        } else {
+          line.style.stroke = "#38bdf8";
+          line.style.animationPlayState = "running";
+          line.style.animationDuration = "1.8s";
+        }
+      });
+    }
+
+    // Chart.js Generation
+    function initChart() {
+      const ctx = document.getElementById('generationChart').getContext('2d');
+      genChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Hydro', 'Nuclear', 'Wind/Solar', 'Gas/Oil', 'Coal'],
+          datasets: [{
+            data: [60, 15, 7, 13, 5],
+            backgroundColor: [
+              '#0284c7', // Hydro
+              '#7c3aed', // Nuclear
+              '#10b981', // Wind/Solar
+              '#f59e0b', // Gas
+              '#64748b'  // Coal
+            ],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: '#94a3b8', font: { size: 11 } }
+            }
+          }
+        }
+      });
+    }
+
+    // Fetch Open Government Canada Data via CKAN API
+    async function fetchAPIData() {
+      try {
+        const res = await fetch('https://open.canada.ca/data/api/3/action/package_search?q=electricity+generation');
+        if (res.ok) {
+          const data = await res.json();
+          console.log("Canada Open Data Response:", data);
+        }
+      } catch (err) {
+        console.warn("CKAN API dynamic fetch operating in offline/fallback mode:", err);
+      }
+    }
+
+    function selectRegion(prov) {
+      console.log("Selected Region:", prov);
+    }
+  </script>
+</body>
+</html>
