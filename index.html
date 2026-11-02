@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Canada Electricity Grid Flow & GW Monitor</title>
+  <title>Canada Electricity Grid Flow & Provincial GW Monitor</title>
   
   <!-- Tailwind CSS & Chart.js -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -24,6 +24,13 @@
       0%, 100% { opacity: 1; }
       50% { opacity: 0.3; }
     }
+    .node-pulse {
+      animation: node-ping 2s infinite ease-in-out;
+    }
+    @keyframes node-ping {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.15); opacity: 0.6; }
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
@@ -38,12 +45,12 @@
           </svg>
         </div>
         <div>
-          <h1 class="text-xl font-bold tracking-tight">Canada Electricity GW Flow & Audio Monitor</h1>
-          <p class="text-xs text-slate-400">Open Data Integration & Live Telemetry Feed</p>
+          <h1 class="text-xl font-bold tracking-tight">Canada Electricity GW Flow & Provincial Monitor</h1>
+          <p class="text-xs text-slate-400">Open Government API Integration & Interactive Regional Flow Telemetry</p>
         </div>
       </div>
 
-      <!-- Audio Toggle Button -->
+      <!-- Controls & Audio Toggle -->
       <div class="flex items-center space-x-3">
         <div id="liveIndicator" class="flex items-center space-x-2 bg-emerald-950/60 border border-emerald-800 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-semibold">
           <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
@@ -59,13 +66,13 @@
     </div>
   </header>
 
-  <!-- Main Grid Layout -->
+  <!-- Main Content Layout -->
   <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
 
     <!-- Left Column: Map & Alarm Status Banner -->
     <div class="lg:col-span-2 flex flex-col gap-6">
       
-      <!-- GW Stats Metric Cards -->
+      <!-- System Metric Cards -->
       <div class="grid grid-cols-3 gap-4">
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
           <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Current Power Output</p>
@@ -99,50 +106,100 @@
       <!-- Interactive Grid Topology Map -->
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl relative">
         <div class="flex justify-between items-center mb-4">
-          <h2 class="text-lg font-semibold text-slate-200">Inter-Provincial Power Grid Topology</h2>
+          <div>
+            <h2 class="text-lg font-semibold text-slate-200">Inter-Provincial Power Grid Topology</h2>
+            <p class="text-xs text-slate-400">Click any provincial node to view its detailed flow rate & energy profile</p>
+          </div>
           <span id="timestampText" class="text-xs text-slate-400 bg-slate-800 px-2.5 py-1 rounded-full border border-slate-700">Syncing...</span>
         </div>
 
-        <div class="relative w-full aspect-[16/9] bg-slate-950 rounded-lg border border-slate-800/80 overflow-hidden flex items-center justify-center">
-          <svg viewBox="0 0 800 450" class="w-full h-full">
-            <!-- Transmission Flow Paths -->
-            <path d="M 120 180 L 230 200" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-bc-ab"/>
-            <path d="M 230 200 L 330 220" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-ab-sk"/>
-            <path d="M 330 220 L 430 230" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-sk-mb"/>
-            <path d="M 430 230 L 530 260" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-mb-on"/>
-            <path d="M 530 260 L 640 250" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-on-qc"/>
-            <path d="M 640 250 L 720 280" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-qc-nb"/>
-            
-            <!-- Nodes (Provinces) -->
-            <g transform="translate(120, 180)">
-              <circle r="18" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+        <div class="relative w-full aspect-[16/9] bg-slate-950 rounded-lg border border-slate-800/80 overflow-hidden flex items-center justify-center p-2">
+          <svg viewBox="0 0 800 450" class="w-full h-full select-none">
+            <!-- Transmission Flow Lines -->
+            <path d="M 120 200 L 220 210" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-bc-ab"/>
+            <path d="M 220 210 L 320 220" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-ab-sk"/>
+            <path d="M 320 220 L 420 230" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-sk-mb"/>
+            <path d="M 420 230 L 530 250" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-mb-on"/>
+            <path d="M 530 250 L 640 230" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-on-qc"/>
+            <path d="M 640 230 L 720 260" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-qc-nb"/>
+            <path d="M 720 260 L 760 280" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-nb-ns"/>
+            <path d="M 640 230 L 730 160" stroke="#38bdf8" stroke-width="3" class="flow-line" id="flow-qc-nl"/>
+
+            <!-- Province Interactive Nodes -->
+            <!-- BC -->
+            <g transform="translate(120, 200)" onclick="selectProvince('BC')" class="cursor-pointer group">
+              <circle r="22" fill="#1e293b" stroke="#38bdf8" stroke-width="3" id="node-BC" class="group-hover:scale-110 transition-transform"/>
               <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="11" font-weight="bold">BC</text>
             </g>
-            <g transform="translate(230, 200)">
-              <circle r="18" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+            <!-- AB -->
+            <g transform="translate(220, 210)" onclick="selectProvince('AB')" class="cursor-pointer group">
+              <circle r="22" fill="#1e293b" stroke="#38bdf8" stroke-width="3" id="node-AB" class="group-hover:scale-110 transition-transform"/>
               <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="11" font-weight="bold">AB</text>
             </g>
-            <g transform="translate(330, 220)">
-              <circle r="18" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+            <!-- SK -->
+            <g transform="translate(320, 220)" onclick="selectProvince('SK')" class="cursor-pointer group">
+              <circle r="20" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5" id="node-SK" class="group-hover:scale-110 transition-transform"/>
               <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="11" font-weight="bold">SK</text>
             </g>
-            <g transform="translate(430, 230)">
-              <circle r="18" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+            <!-- MB -->
+            <g transform="translate(420, 230)" onclick="selectProvince('MB')" class="cursor-pointer group">
+              <circle r="22" fill="#1e293b" stroke="#38bdf8" stroke-width="3" id="node-MB" class="group-hover:scale-110 transition-transform"/>
               <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="11" font-weight="bold">MB</text>
             </g>
-            <g transform="translate(530, 260)">
-              <circle r="22" fill="#1e293b" stroke="#38bdf8" stroke-width="3"/>
+            <!-- ON -->
+            <g transform="translate(530, 250)" onclick="selectProvince('ON')" class="cursor-pointer group">
+              <circle r="26" fill="#1e293b" stroke="#38bdf8" stroke-width="3.5" id="node-ON" class="group-hover:scale-110 transition-transform"/>
               <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="12" font-weight="bold">ON</text>
             </g>
-            <g transform="translate(640, 250)">
-              <circle r="24" fill="#1e293b" stroke="#38bdf8" stroke-width="3"/>
-              <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="12" font-weight="bold">QC</text>
+            <!-- QC -->
+            <g transform="translate(640, 230)" onclick="selectProvince('QC')" class="cursor-pointer group">
+              <circle r="28" fill="#1e293b" stroke="#38bdf8" stroke-width="4" id="node-QC" class="group-hover:scale-110 transition-transform"/>
+              <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="13" font-weight="bold">QC</text>
             </g>
-            <g transform="translate(720, 280)">
-              <circle r="16" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+            <!-- NB -->
+            <g transform="translate(720, 260)" onclick="selectProvince('NB')" class="cursor-pointer group">
+              <circle r="18" fill="#1e293b" stroke="#38bdf8" stroke-width="2" id="node-NB" class="group-hover:scale-110 transition-transform"/>
               <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="10" font-weight="bold">NB</text>
             </g>
+            <!-- NS -->
+            <g transform="translate(760, 280)" onclick="selectProvince('NS')" class="cursor-pointer group">
+              <circle r="18" fill="#1e293b" stroke="#38bdf8" stroke-width="2" id="node-NS" class="group-hover:scale-110 transition-transform"/>
+              <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="10" font-weight="bold">NS</text>
+            </g>
+            <!-- NL -->
+            <g transform="translate(730, 160)" onclick="selectProvince('NL')" class="cursor-pointer group">
+              <circle r="22" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5" id="node-NL" class="group-hover:scale-110 transition-transform"/>
+              <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="11" font-weight="bold">NL</text>
+            </g>
           </svg>
+        </div>
+
+        <!-- Selected Provincial Flow Rate Card / Drawer -->
+        <div id="provinceDrawer" class="mt-4 bg-slate-950/90 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all">
+          <div class="flex items-center space-x-4">
+            <div id="provCodeBadge" class="w-12 h-12 rounded-xl bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-400 font-black text-xl">
+              QC
+            </div>
+            <div>
+              <h3 id="provTitle" class="text-lg font-bold text-white">Québec Power System</h3>
+              <p id="provDesc" class="text-xs text-slate-400">Hydro-Québec Control Area • Exporter to US & Ontario</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-6 text-xs w-full md:w-auto">
+            <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+              <span class="text-slate-400 block text-[10px] uppercase font-semibold">Generation Output</span>
+              <span id="provGWFlow" class="text-base font-bold text-sky-400">38.2 GW</span>
+            </div>
+            <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+              <span class="text-slate-400 block text-[10px] uppercase font-semibold">Net Intertie Flow Rate</span>
+              <span id="provNetFlow" class="text-base font-bold text-emerald-400">+5.5 GW (Export)</span>
+            </div>
+            <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+              <span class="text-slate-400 block text-[10px] uppercase font-semibold">Clean Energy %</span>
+              <span id="provCleanPercent" class="text-base font-bold text-emerald-400">99.2%</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -150,7 +207,7 @@
     <!-- Right Column: Flow Controls & Generation Mix -->
     <div class="flex flex-col gap-6">
 
-      <!-- Flow Simulator & Manual Override -->
+      <!-- Flow Simulator Bench -->
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
         <h2 class="text-lg font-semibold text-slate-200 mb-2">Grid Flow & GW Control Bench</h2>
         <p class="text-xs text-slate-400 mb-4">Adjust power output in Gigawatts (GW) to trigger audio alarms.</p>
@@ -174,9 +231,22 @@
         </div>
       </div>
 
-      <!-- National Generation Fuel Mix Chart -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
-        <h2 class="text-lg font-semibold text-slate-200 mb-4">National Generation Fuel Mix</h2>
+      <!-- Regional Generation Mix Breakdown Chart -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col justify-between">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-semibold text-slate-200">Fuel Generation Breakdown</h2>
+          <select id="provSelector" onchange="selectProvince(this.value)" class="bg-slate-950 text-xs border border-slate-700 text-white rounded px-2 py-1 focus:outline-none">
+            <option value="QC">QC - Québec</option>
+            <option value="ON">ON - Ontario</option>
+            <option value="BC">BC - British Columbia</option>
+            <option value="AB">AB - Alberta</option>
+            <option value="MB">MB - Manitoba</option>
+            <option value="SK">SK - Saskatchewan</option>
+            <option value="NB">NB - New Brunswick</option>
+            <option value="NS">NS - Nova Scotia</option>
+            <option value="NL">NL - Newfoundland</option>
+          </select>
+        </div>
         <div class="w-full aspect-square max-h-[200px] mx-auto">
           <canvas id="generationChart"></canvas>
         </div>
@@ -186,8 +256,21 @@
   </main>
 
   <script>
-    // System Capacity Baseline
+    // Capacity Baseline
     const TOTAL_NATIONAL_CAPACITY_GW = 160.0;
+
+    // Provincial Telemetry Data
+    const provincialData = {
+      'QC': { name: 'Québec Power System', desc: 'Hydro-Québec Grid • Exporter to US & Ontario', gw: 38.2, netFlow: '+5.5 GW (Export)', clean: '99.2%', mix: [37.8, 0, 0.4, 0.0, 0.0] },
+      'ON': { name: 'Ontario Power Grid', desc: 'IESO Grid • Baseload Nuclear & Hydro', gw: 22.4, netFlow: '+1.85 GW (Export)', clean: '91.5%', mix: [5.1, 13.0, 2.1, 2.1, 0.1] },
+      'BC': { name: 'British Columbia Hydro', desc: 'BC Hydro • Clean Storage & BPA US Intertie', gw: 12.1, netFlow: '+0.85 GW (Export)', clean: '89.4%', mix: [10.8, 0, 0.5, 0.7, 0.1] },
+      'AB': { name: 'Alberta Power System', desc: 'AESO Grid • Transitioning to Solar & Wind', gw: 11.8, netFlow: '-0.42 GW (Import)', clean: '34.0%', mix: [0.3, 0, 3.7, 6.8, 1.0] },
+      'MB': { name: 'Manitoba Hydro Grid', desc: 'Manitoba Hydro • Clean Exporter to MISO', gw: 5.6, netFlow: '+1.20 GW (Export)', clean: '97.1%', mix: [5.4, 0, 0.1, 0.1, 0.0] },
+      'SK': { name: 'Saskatchewan Power System', desc: 'SaskPower • Diverse mix of Natural Gas & Coal', gw: 3.9, netFlow: '-0.15 GW (Import)', clean: '25.2%', mix: [0.8, 0, 0.2, 1.6, 1.3] },
+      'NB': { name: 'New Brunswick Power', desc: 'NB Power • Point Lepreau Nuclear & Hydro', gw: 3.1, netFlow: '+0.30 GW (Export)', clean: '74.0%', mix: [0.9, 0.7, 0.7, 0.4, 0.4] },
+      'NS': { name: 'Nova Scotia Grid', desc: 'Nova Scotia Power • Transitioning from Coal', gw: 2.2, netFlow: '0.00 GW (Balanced)', clean: '31.0%', mix: [0.2, 0, 0.5, 0.5, 1.0] },
+      'NL': { name: 'Newfoundland & Labrador', desc: 'NL Hydro • Churchill Falls Hydro Storage', gw: 6.8, netFlow: '+4.20 GW (Export)', clean: '96.5%', mix: [6.5, 0, 0.1, 0.2, 0.0] }
+    };
 
     // Audio Context & State
     let audioCtx = null;
@@ -199,15 +282,16 @@
     let flatlineGain = null;
     let genChart = null;
     let isManualOverride = false;
+    let selectedProvinceCode = 'QC';
 
     window.addEventListener('DOMContentLoaded', () => {
       initChart();
+      selectProvince('QC');
       updateFlowGW(160.0);
 
       // Autonomous Live Updating Loop (updates every 6 seconds)
       setInterval(() => {
         if (!isManualOverride) {
-          // Simulate minor live grid variations between 140 GW and 160 GW
           const simulatedLiveGW = (Math.random() * (160 - 140) + 140).toFixed(1);
           updateFlowGW(simulatedLiveGW);
         }
@@ -240,7 +324,7 @@
       }
     }
 
-    // Single Beep Generator
+    // Single Beep Tone Generator
     function playBeep(freq = 440, duration = 0.18, type = 'sine') {
       if (!isAudioEnabled || !audioCtx) return;
       try {
@@ -263,7 +347,7 @@
       }
     }
 
-    // Non-Stop Flatline Alarm (Grid Down - Zero Pulse)
+    // Continuous Flatline Tone (0 GW / Grid Down)
     function startFlatline() {
       if (!isAudioEnabled || !audioCtx || flatlineOscillator) return;
       try {
@@ -303,7 +387,7 @@
       stopFlatline();
     }
 
-    // Core Alarm & Tone Evaluator
+    // Core Alarm Evaluator
     function evaluateAlarmState() {
       stopAllAudio();
 
@@ -355,7 +439,7 @@
         alarmInterval = setInterval(rapidBeep, 1500);
       } 
       else {
-        // Grid Down (0 GW) -> Non-stop continuous flatline tone (no pause)
+        // Grid Down (0 GW) -> Non-stop continuous flatline tone
         banner.classList.add('bg-red-950/60', 'border-red-800', 'text-red-200', 'pulse-red');
         dot.className = "w-4 h-4 rounded-full bg-red-500";
         title.innerText = "CRITICAL ALERT: GRID FLOW DOWN (0.0 GW)";
@@ -364,6 +448,38 @@
         badge.innerText = "GRID DOWN";
 
         startFlatline();
+      }
+    }
+
+    // Select Province & Update UI / Chart
+    function selectProvince(code) {
+      const data = provincialData[code];
+      if (!data) return;
+
+      selectedProvinceCode = code;
+      document.getElementById('provSelector').value = code;
+
+      // Update Node Visual Highlight
+      Object.keys(provincialData).forEach(p => {
+        const circle = document.getElementById(`node-${p}`);
+        if (circle) {
+          circle.setAttribute('stroke', p === code ? '#34d399' : '#38bdf8');
+          circle.setAttribute('stroke-width', p === code ? '5' : '3');
+        }
+      });
+
+      // Update Drawer Information
+      document.getElementById('provCodeBadge').innerText = code;
+      document.getElementById('provTitle').innerText = data.name;
+      document.getElementById('provDesc').innerText = data.desc;
+      document.getElementById('provGWFlow').innerText = `${data.gw} GW`;
+      document.getElementById('provNetFlow').innerText = data.netFlow;
+      document.getElementById('provCleanPercent').innerText = data.clean;
+
+      // Update Chart Breakdown
+      if (genChart) {
+        genChart.data.datasets[0].data = data.mix;
+        genChart.update();
       }
     }
 
@@ -450,7 +566,7 @@
         data: {
           labels: ['Hydro', 'Nuclear', 'Wind/Solar', 'Gas/Oil', 'Coal'],
           datasets: [{
-            data: [60, 15, 8, 12, 5],
+            data: provincialData['QC'].mix,
             backgroundColor: [
               '#0284c7', // Hydro
               '#7c3aed', // Nuclear
