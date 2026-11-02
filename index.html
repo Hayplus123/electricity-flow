@@ -2,718 +2,169 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <title>Canada Provincial Grid Dashboard — Simulation</title>
-
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+  <title>Ontario Electricity Demand Monitor</title>
 
   <style>
-    @keyframes dash {
-      to { stroke-dashoffset: -40; }
+    :root {
+      color-scheme: dark;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #020617;
+      color: #e2e8f0;
     }
 
-    .flow-line {
-      stroke-dasharray: 8;
-      animation: dash 1.5s linear infinite;
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+
+    header {
+      background: #0f172a;
+      border-bottom: 1px solid #1e293b;
     }
 
-    .province-node {
+    .container {
+      max-width: 1150px;
+      margin: auto;
+      padding: 24px;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    h1 { font-size: 25px; margin: 0; }
+    h2 { font-size: 19px; margin: 0 0 12px; }
+    p { line-height: 1.6; margin: 8px 0; }
+    a { color: #7dd3fc; }
+    .muted { color: #94a3b8; }
+    .small { font-size: 13px; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 20px;
+      margin: 24px 0;
+    }
+
+    .panel {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 24px;
+      min-width: 0;
+    }
+
+    .label {
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-size: 12px;
+    }
+
+    .metric {
+      font-size: 34px;
+      font-weight: 800;
+      color: #38bdf8;
+      margin-top: 14px;
+      overflow-wrap: anywhere;
+    }
+
+    .period { font-size: 23px; line-height: 1.5; }
+
+    .banner {
+      padding: 20px;
+      border: 1px solid #475569;
+      border-radius: 14px;
+      background: #0f172a;
+    }
+
+    .banner[data-kind="ok"] {
+      background: #082f49;
+      border-color: #0369a1;
+    }
+
+    .banner[data-kind="warning"] {
+      background: #422006;
+      border-color: #a16207;
+    }
+
+    .banner[data-kind="error"] {
+      background: #450a0a;
+      border-color: #b91c1c;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 24px;
+    }
+
+    button {
+      background: #0369a1;
+      color: white;
+      border: 1px solid #0284c7;
+      border-radius: 9px;
+      padding: 11px 16px;
+      font: inherit;
       cursor: pointer;
     }
 
-    .province-node:focus-visible circle {
-      stroke: white;
-      stroke-width: 5;
+    button:hover { background: #075985; }
+    button:disabled { opacity: .5; cursor: wait; }
+
+    svg {
+      display: block;
+      width: 100%;
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
     }
 
-    @media (prefers-reduced-motion: reduce) {
-      .flow-line {
-        animation: none;
-      }
+    .chart-labels {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      margin: 10px 0;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    .table-scroll {
+      max-height: 320px;
+      overflow: auto;
+      margin-top: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 10px;
+      border-bottom: 1px solid #1e293b;
+    }
+
+    th { color: #94a3b8; }
+
+    .wrap { overflow-wrap: anywhere; }
+
+    hr {
+      border: 0;
+      border-top: 1px solid #334155;
+      margin: 20px 0;
+    }
+
+    @media (max-width: 800px) {
+      .cards, .layout { grid-template-columns: 1fr; }
+      .container { padding: 16px; }
+      h1 { font-size: 21px; }
     }
   </style>
-</head>
-
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
-
-  <header class="border-b border-slate-800 bg-slate-900">
-    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-4">
-      <div>
-        <h1 class="text-xl font-bold">
-          Canada Provincial Grid Dashboard
-        </h1>
-        <p class="text-sm text-slate-400">
-          Provincial visualization & audio testing
-        </p>
-      </div>
-
-      <button
-        id="audioToggleBtn"
-        type="button"
-        aria-pressed="false"
-        class="px-4 py-2 bg-amber-700 hover:bg-amber-600 rounded-lg font-semibold"
-      >
-        Enable Test Audio
-      </button>
-    </div>
-  </header>
-
-  <main class="max-w-7xl mx-auto px-4 py-6">
-
-    <section class="mb-6 p-4 border border-amber-700 rounded-xl bg-amber-950/40">
-      <h2 class="font-bold text-amber-200">
-        SIMULATION — NOT LIVE ELECTRICITY DATA
-      </h2>
-      <p class="text-sm text-amber-100/80 mt-1">
-        No electricity API is connected. Output is calculated from manual
-        test settings. Capacity and fuel mix are unverified demo inputs,
-        not current operator measurements.
-      </p>
-    </section>
-
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-      <div class="lg:col-span-2 flex flex-col gap-6">
-
-        <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-            <p id="metricRegionTitle" class="text-xs uppercase text-slate-400">
-              Ontario
-            </p>
-            <h2 id="currentGWText" class="text-2xl font-black text-sky-400 mt-1">
-              —
-            </h2>
-            <p class="text-xs text-slate-500 mt-2">
-              Simulated output
-            </p>
-          </div>
-
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-            <p class="text-xs uppercase text-slate-400">
-              Demo Capacity
-            </p>
-            <h2 id="maxCapacityGWText" class="text-2xl font-black text-sky-400 mt-1">
-              —
-            </h2>
-            <p class="text-xs text-slate-500 mt-2">
-              Configured input · unverified
-            </p>
-          </div>
-
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-            <p class="text-xs uppercase text-slate-400">
-              Simulation Setting
-            </p>
-            <h2 id="capacityPercentText" class="text-2xl font-black text-sky-400 mt-1">
-              —
-            </h2>
-            <p class="text-xs text-slate-500 mt-2">
-              Percentage of demo capacity
-            </p>
-          </div>
-        </section>
-
-        <section
-          id="alarmBanner"
-          aria-live="polite"
-          class="p-4 rounded-xl border border-slate-700 bg-slate-900"
-        >
-          <div class="flex items-center justify-between gap-4">
-            <div>
-              <h2 id="alarmTitle" class="font-bold text-lg">
-                Simulation ready
-              </h2>
-              <p id="alarmDescription" class="text-sm text-slate-300 mt-1">
-                No actual grid condition is inferred.
-              </p>
-            </div>
-
-            <span
-              id="alarmBadge"
-              class="px-3 py-1 rounded bg-slate-800 text-xs font-bold whitespace-nowrap"
-            >
-              TEST
-            </span>
-          </div>
-        </section>
-
-        <section class="bg-slate-900 border border-slate-800 rounded-xl p-5">
-          <div class="flex flex-wrap justify-between gap-3 mb-4">
-            <div>
-              <h2 class="text-lg font-semibold">
-                Provincial Selection Map
-              </h2>
-              <p class="text-xs text-slate-400 mt-1">
-                Schematic only. Animated lines are decorative, not measured flows.
-              </p>
-            </div>
-
-            <span id="timestampText" class="text-xs text-slate-400">
-              Interface updated: —
-            </span>
-          </div>
-
-          <div class="bg-slate-950 border border-slate-800 rounded-lg overflow-hidden">
-            <svg
-              id="provinceMap"
-              viewBox="0 0 800 360"
-              class="w-full"
-              role="group"
-              aria-label="Select a province"
-            >
-              <g
-                fill="none"
-                stroke="#38bdf8"
-                stroke-width="2"
-                opacity="0.45"
-                aria-hidden="true"
-              >
-                <path class="flow-line" d="M80 140 L180 160 L280 180 L380 190 L480 220 L590 200 L680 240 L740 280"></path>
-              </g>
-
-              <g id="mapNodes"></g>
-            </svg>
-          </div>
-
-          <p class="text-xs text-slate-500 mt-3">
-            Province placement and connecting lines are illustrative.
-            This is not a complete transmission-network model.
-          </p>
-        </section>
-
-      </div>
-
-      <div class="flex flex-col gap-6">
-
-        <section class="bg-slate-900 border border-slate-800 rounded-xl p-5">
-          <h2 class="text-lg font-semibold mb-4">
-            Simulation Controls
-          </h2>
-
-          <label for="provinceSelect" class="block text-xs text-slate-400 mb-1">
-            Select province
-          </label>
-
-          <select
-            id="provinceSelect"
-            class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 mb-5"
-          ></select>
-
-          <div class="flex justify-between items-center text-sm mb-2 gap-2">
-            <label for="flowSlider" class="text-slate-400">
-              Simulated output
-            </label>
-            <span id="flowValueText" class="font-semibold">
-              —
-            </span>
-          </div>
-
-          <input
-            id="flowSlider"
-            type="range"
-            min="0"
-            max="100"
-            value="98"
-            step="1"
-            class="w-full accent-sky-500"
-          >
-
-          <div class="grid grid-cols-2 gap-2 mt-4 text-xs">
-            <button
-              type="button"
-              data-preset="100"
-              class="p-2 rounded border border-slate-700 bg-slate-800 hover:bg-slate-700"
-            >
-              100% · Silent
-            </button>
-            <button
-              type="button"
-              data-preset="75"
-              class="p-2 rounded border border-slate-700 bg-slate-800 hover:bg-slate-700"
-            >
-              75% · 5s Beep
-            </button>
-            <button
-              type="button"
-              data-preset="50"
-              class="p-2 rounded border border-slate-700 bg-slate-800 hover:bg-slate-700"
-            >
-              50% · Rapid Beep
-            </button>
-            <button
-              type="button"
-              data-preset="0"
-              class="p-2 rounded border border-slate-700 bg-slate-800 hover:bg-slate-700"
-            >
-              0% · Continuous Tone
-            </button>
-          </div>
-
-          <p class="text-xs text-slate-500 mt-4">
-            Settings are retained per province until the page is reloaded.
-            No automatic random updates run.
-          </p>
-
-          <p id="audioStatus" class="text-xs text-slate-400 mt-3" role="status">
-            Test audio is off.
-          </p>
-        </section>
-
-        <section class="bg-slate-900 border border-slate-800 rounded-xl p-5">
-          <h2 id="chartTitle" class="text-lg font-semibold">
-            Demo Fuel Mix
-          </h2>
-
-          <p class="text-xs text-slate-500 mt-1 mb-4">
-            Static demonstration percentages — not live generation.
-          </p>
-
-          <div id="chartContainer" class="relative h-64">
-            <canvas
-              id="generationChart"
-              role="img"
-              aria-label="Demo fuel mix"
-            ></canvas>
-          </div>
-
-          <p id="chartFallback" class="text-sm text-slate-400 mt-3"></p>
-        </section>
-
-      </div>
-    </div>
-  </main>
-
-  <script>
-    "use strict";
-
-    /*
-      DEMO INPUTS ONLY.
-      These values are carried over from the original application.
-      They are not verified, dated operator data.
-    */
-    const PROVINCE_DATA = {
-      QC: { name: "Quebec", capacityGW: 46.5, mix: [94, 0, 5, 1, 0], x: 590, y: 200 },
-      ON: { name: "Ontario", capacityGW: 38.2, mix: [25, 54, 11, 10, 0], x: 480, y: 220 },
-      BC: { name: "British Columbia", capacityGW: 18.5, mix: [88, 0, 8, 4, 0], x: 80, y: 140 },
-      AB: { name: "Alberta", capacityGW: 19.1, mix: [4, 0, 25, 63, 8], x: 180, y: 160 },
-      MB: { name: "Manitoba", capacityGW: 6.2, mix: [97, 0, 3, 0, 0], x: 380, y: 190 },
-      NL: { name: "Newfoundland & Labrador", capacityGW: 7.8, mix: [96, 0, 1, 3, 0], x: 700, y: 90 },
-      SK: { name: "Saskatchewan", capacityGW: 4.6, mix: [14, 0, 9, 45, 32], x: 280, y: 180 },
-      NB: { name: "New Brunswick", capacityGW: 4.4, mix: [22, 38, 11, 14, 15], x: 680, y: 240 },
-      NS: { name: "Nova Scotia", capacityGW: 2.5, mix: [10, 0, 14, 40, 36], x: 740, y: 280 }
-    };
-
-    const FUEL_LABELS = [
-      "Hydro", "Nuclear", "Wind/Solar", "Gas/Oil", "Coal"
-    ];
-
-    const simulationPercent = Object.fromEntries(
-      Object.keys(PROVINCE_DATA).map(key => [key, 98])
-    );
-
-    let activeRegionKey = "ON";
-    let genChart = null;
-
-    let audioCtx = null;
-    let isAudioEnabled = false;
-    let audioBusy = false;
-    let alarmInterval = null;
-    let activeAudioBand = null;
-
-    const activeVoices = new Set();
-    const $ = id => document.getElementById(id);
-
-    function getBand(percent) {
-      if (percent === 0) return "zero";
-      if (percent < 65) return "low";
-      if (percent < 85) return "mid";
-      return "high";
-    }
-
-    function buildProvinceControls() {
-      const namespace = "http://www.w3.org/2000/svg";
-
-      for (const [key, province] of Object.entries(PROVINCE_DATA)) {
-        const option = document.createElement("option");
-        option.value = key;
-        option.textContent = `${province.name} (${key})`;
-        $("provinceSelect").appendChild(option);
-
-        const group = document.createElementNS(namespace, "g");
-        group.setAttribute("transform", `translate(${province.x}, ${province.y})`);
-        group.setAttribute("class", "province-node");
-        group.setAttribute("role", "button");
-        group.setAttribute("tabindex", "0");
-        group.setAttribute("aria-label", `Select ${province.name}`);
-        group.setAttribute("aria-pressed", "false");
-        group.dataset.region = key;
-
-        const circle = document.createElementNS(namespace, "circle");
-        circle.setAttribute("r", "21");
-        circle.setAttribute("fill", "#1e293b");
-        circle.setAttribute("stroke", "#38bdf8");
-        circle.setAttribute("stroke-width", "2");
-
-        const text = document.createElementNS(namespace, "text");
-        text.setAttribute("text-anchor", "middle");
-        text.setAttribute("dy", "4");
-        text.setAttribute("fill", "#f8fafc");
-        text.setAttribute("font-size", "11");
-        text.setAttribute("font-weight", "bold");
-        text.textContent = key;
-
-        group.append(circle, text);
-
-        group.addEventListener("click", () => selectProvince(key));
-        group.addEventListener("keydown", event => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            selectProvince(key);
-          }
-        });
-
-        $("mapNodes").appendChild(group);
-      }
-    }
-
-    function initChart() {
-      if (typeof Chart === "undefined") {
-        $("chartContainer").hidden = true;
-        return;
-      }
-
-      try {
-        genChart = new Chart($("generationChart"), {
-          type: "doughnut",
-          data: {
-            labels: FUEL_LABELS,
-            datasets: [{
-              data: PROVINCE_DATA[activeRegionKey].mix.slice(),
-              backgroundColor: [
-                "#0284c7", "#7c3aed", "#10b981", "#f59e0b", "#64748b"
-              ],
-              borderWidth: 0
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: "bottom",
-                labels: {
-                  color: "#94a3b8",
-                  font: { size: 11 }
-                }
-              },
-              tooltip: {
-                callbacks: {
-                  label: context => `${context.label}: ${context.raw}% (demo)`
-                }
-              }
-            }
-          }
-        });
-      } catch (error) {
-        console.error("Chart initialization failed:", error);
-        $("chartContainer").hidden = true;
-        genChart = null;
-      }
-    }
-
-    function selectProvince(key) {
-      if (!Object.prototype.hasOwnProperty.call(PROVINCE_DATA, key)) return;
-
-      activeRegionKey = key;
-      render();
-    }
-
-    function setSimulationPercent(value) {
-      const percent = Number(value);
-
-      if (!Number.isFinite(percent)) return;
-
-      simulationPercent[activeRegionKey] =
-        Math.max(0, Math.min(100, Math.round(percent)));
-
-      render();
-    }
-
-    function render() {
-      const province = PROVINCE_DATA[activeRegionKey];
-      const percent = simulationPercent[activeRegionKey];
-      const outputGW = province.capacityGW * percent / 100;
-      const band = getBand(percent);
-
-      $("provinceSelect").value = activeRegionKey;
-      $("metricRegionTitle").textContent = province.name;
-      $("currentGWText").textContent = `${outputGW.toFixed(1)} GW`;
-      $("maxCapacityGWText").textContent =
-        `${province.capacityGW.toFixed(1)} GW`;
-      $("capacityPercentText").textContent = `${percent}%`;
-      $("flowSlider").value = String(percent);
-      $("flowSlider").setAttribute(
-        "aria-valuetext",
-        `${percent} percent, ${outputGW.toFixed(1)} gigawatts simulated`
-      );
-
-      $("flowValueText").textContent =
-        `${outputGW.toFixed(1)} GW (${percent}%)`;
-
-      $("timestampText").textContent =
-        `Interface updated: ${new Date().toLocaleString(undefined, {
-          timeZoneName: "short"
-        })}`;
-
-      document.querySelectorAll("[data-region]").forEach(group => {
-        const selected = group.dataset.region === activeRegionKey;
-        const circle = group.querySelector("circle");
-
-        group.setAttribute("aria-pressed", String(selected));
-        circle.setAttribute("stroke", selected ? "#f59e0b" : "#38bdf8");
-        circle.setAttribute("stroke-width", selected ? "4" : "2");
-      });
-
-      $("chartTitle").textContent = `${province.name} Demo Fuel Mix`;
-
-      const mixDescription = FUEL_LABELS.map(
-        (label, index) => `${label}: ${province.mix[index]}%`
-      ).join(" · ");
-
-      $("generationChart").setAttribute(
-        "aria-label",
-        `${province.name} demo fuel mix. ${mixDescription}`
-      );
-
-      if (genChart) {
-        genChart.data.datasets[0].data = province.mix.slice();
-        genChart.update();
-        $("chartFallback").textContent = "";
-      } else {
-        $("chartFallback").textContent = mixDescription;
-      }
-
-      renderSimulationBanner(band, province.name, outputGW);
-      syncAudio(band);
-    }
-
-    function renderSimulationBanner(band, name, outputGW) {
-      const settings = {
-        high: {
-          color: "#38bdf8",
-          title: "High-range simulation",
-          description: "Silent test range: 85–100% of configured demo capacity.",
-          badge: "SILENT TEST"
-        },
-        mid: {
-          color: "#facc15",
-          title: "Mid-range simulation",
-          description: "Audio test: one beep every five seconds when enabled.",
-          badge: "5s BEEP TEST"
-        },
-        low: {
-          color: "#fb923c",
-          title: "Low-range simulation",
-          description: "Audio test: one beep every 1.5 seconds when enabled.",
-          badge: "RAPID TEST"
-        },
-        zero: {
-          color: "#f87171",
-          title: "Zero-output simulation",
-          description: "Continuous test tone when enabled. This does not indicate an outage.",
-          badge: "ZERO TEST"
-        }
-      };
-
-      const setting = settings[band];
-
-      $("alarmBanner").style.borderColor = setting.color;
-      $("alarmTitle").style.color = setting.color;
-      $("alarmTitle").textContent =
-        `${name}: ${setting.title} (${outputGW.toFixed(1)} GW)`;
-      $("alarmDescription").textContent = setting.description;
-      $("alarmBadge").textContent = setting.badge;
-    }
-
-    function createTone(frequency, duration = null) {
-      if (!isAudioEnabled || !audioCtx || audioCtx.state !== "running") {
-        return;
-      }
-
-      const oscillator = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      const voice = { oscillator, gain };
-
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
-
-      gain.gain.setValueAtTime(0, audioCtx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.06, audioCtx.currentTime + 0.01);
-
-      if (duration !== null) {
-        gain.gain.exponentialRampToValueAtTime(
-          0.001,
-          audioCtx.currentTime + duration
-        );
-      }
-
-      oscillator.connect(gain);
-      gain.connect(audioCtx.destination);
-
-      activeVoices.add(voice);
-
-      oscillator.onended = () => {
-        oscillator.disconnect();
-        gain.disconnect();
-        activeVoices.delete(voice);
-      };
-
-      oscillator.start();
-
-      if (duration !== null) {
-        oscillator.stop(audioCtx.currentTime + duration + 0.02);
-      }
-    }
-
-    function stopAllAudio() {
-      if (alarmInterval !== null) {
-        clearInterval(alarmInterval);
-        alarmInterval = null;
-      }
-
-      for (const voice of activeVoices) {
-        try {
-          voice.gain.gain.cancelScheduledValues(audioCtx.currentTime);
-          voice.gain.gain.setValueAtTime(0, audioCtx.currentTime);
-          voice.oscillator.stop();
-        } catch (error) {
-          console.debug("Audio voice already stopped:", error);
-        }
-      }
-
-      activeVoices.clear();
-      activeAudioBand = null;
-    }
-
-    function syncAudio(band) {
-      if (!isAudioEnabled || document.hidden) {
-        stopAllAudio();
-        return;
-      }
-
-      if (activeAudioBand === band) return;
-
-      stopAllAudio();
-      activeAudioBand = band;
-
-      if (band === "mid") {
-        createTone(520, 0.2);
-        alarmInterval = setInterval(() => createTone(520, 0.2), 5000);
-      } else if (band === "low") {
-        createTone(660, 0.12);
-        alarmInterval = setInterval(() => createTone(660, 0.12), 1500);
-      } else if (band === "zero") {
-        createTone(440);
-      }
-    }
-
-    async function toggleAudio() {
-      if (audioBusy) return;
-
-      if (isAudioEnabled) {
-        isAudioEnabled = false;
-        stopAllAudio();
-        updateAudioButton();
-        return;
-      }
-
-      audioBusy = true;
-      $("audioToggleBtn").disabled = true;
-
-      try {
-        const AudioContextClass =
-          window.AudioContext || window.webkitAudioContext;
-
-        if (!AudioContextClass) {
-          throw new Error("Web Audio is not supported by this browser.");
-        }
-
-        if (!audioCtx || audioCtx.state === "closed") {
-          audioCtx = new AudioContextClass();
-        }
-
-        await audioCtx.resume();
-
-        if (audioCtx.state !== "running") {
-          throw new Error("The browser did not allow audio to start.");
-        }
-
-        isAudioEnabled = true;
-        updateAudioButton();
-        syncAudio(getBand(simulationPercent[activeRegionKey]));
-      } catch (error) {
-        isAudioEnabled = false;
-        stopAllAudio();
-        updateAudioButton();
-        $("audioStatus").textContent = `Audio unavailable: ${error.message}`;
-      } finally {
-        audioBusy = false;
-        $("audioToggleBtn").disabled = false;
-      }
-    }
-
-    function updateAudioButton() {
-      $("audioToggleBtn").setAttribute(
-        "aria-pressed",
-        String(isAudioEnabled)
-      );
-
-      $("audioToggleBtn").textContent =
-        isAudioEnabled ? "Disable Test Audio" : "Enable Test Audio";
-
-      $("audioStatus").textContent = isAudioEnabled
-        ? "Test audio enabled. Start with a low device volume."
-        : "Test audio is off.";
-    }
-
-    document.addEventListener("DOMContentLoaded", () => {
-      buildProvinceControls();
-      initChart();
-
-      $("provinceSelect").addEventListener("change", event => {
-        selectProvince(event.target.value);
-      });
-
-      $("flowSlider").addEventListener("input", event => {
-        setSimulationPercent(event.target.value);
-      });
-
-      document.querySelectorAll("[data-preset]").forEach(button => {
-        button.addEventListener("click", () => {
-          setSimulationPercent(button.dataset.preset);
-        });
-      });
-
-      $("audioToggleBtn").addEventListener("click", toggleAudio);
-
-      document.addEventListener("visibilitychange", () => {
-        if (document.hidden) {
-          isAudioEnabled = false;
-          stopAllAudio();
-          updateAudioButton();
-        }
-      });
-
-      window.addEventListener("pagehide", () => {
-        isAudioEnabled = false;
-        stopAllAudio();
-        updateAudioButton();
-      });
-
-      render();
-    });
-  </script>
-</body>
-</html>
+</h
