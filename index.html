@@ -65,7 +65,7 @@
       <div class="grid grid-cols-3 gap-4">
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
           <p class="text-xs text-slate-400 font-medium uppercase tracking-wider" id="metricRegionTitle">National Grid</p>
-          <h3 id="currentGWText" class="text-2xl font-black text-emerald-400 mt-1">160.0 GW</h3>
+          <h3 id="currentGWText" class="text-2xl font-black text-emerald-400 mt-1">157.1 GW</h3>
           <span class="text-[10px] text-slate-500">Current Flow / Output</span>
         </div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
@@ -75,7 +75,7 @@
         </div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
           <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Capacity Load Factor</p>
-          <h3 id="capacityPercentText" class="text-2xl font-black text-emerald-400 mt-1">100%</h3>
+          <h3 id="capacityPercentText" class="text-2xl font-black text-emerald-400 mt-1">98%</h3>
           <span class="text-[10px] text-slate-500">Operating Percentage</span>
         </div>
       </div>
@@ -164,7 +164,7 @@
         <!-- Dropdown Selector -->
         <label class="block text-xs text-slate-400 mb-1">Select Active Region:</label>
         <select id="provinceSelect" onchange="selectProvince(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm font-semibold text-slate-200 mb-4 focus:ring-2 focus:ring-blue-500">
-          <option value="ALL">All Canada (National Grid - 160.0 GW)</option>
+          <option value="ALL">All Canada (National Grid - 160.0 GW Max)</option>
           <option value="QC">Quebec (QC - Max 46.5 GW)</option>
           <option value="ON">Ontario (ON - Max 38.2 GW)</option>
           <option value="BC">British Columbia (BC - Max 18.5 GW)</option>
@@ -179,10 +179,10 @@
         <div class="space-y-4 border-t border-slate-800/80 pt-4">
           <div>
             <div class="flex justify-between text-sm mb-1">
-              <span class="text-slate-400">Current Flow Output:</span>
-              <span id="flowValueText" class="font-bold text-emerald-400">160.0 GW (100%)</span>
+              <span class="text-slate-400">Current Output Flow:</span>
+              <span id="flowValueText" class="font-bold text-emerald-400">157.1 GW (98%)</span>
             </div>
-            <input type="range" id="flowSlider" min="0" max="100" value="100" step="1" oninput="manualOverridePercent(this.value)" class="w-full accent-blue-500 bg-slate-800 rounded-lg h-2 cursor-pointer">
+            <input type="range" id="flowSlider" min="0" max="100" value="98" step="1" oninput="manualOverridePercent(this.value)" class="w-full accent-blue-500 bg-slate-800 rounded-lg h-2 cursor-pointer">
           </div>
 
           <!-- Alarm Presets -->
@@ -207,7 +207,7 @@
   </main>
 
   <script>
-    // Real Official Capacity (GW) & Specific Energy Mix Data per Province
+    // Real Installed Capacity (GW) & Specific Energy Mix Data per Province
     const PROVINCE_DATA = {
       ALL: { name: "National Canada Grid", capacityGW: 160.0, mix: [60, 15, 8, 12, 5] },
       QC:  { name: "Quebec Grid",          capacityGW: 46.5,  mix: [94, 0, 5, 1, 0] },
@@ -223,8 +223,8 @@
 
     // Current Active State
     let activeRegionKey = 'ALL';
-    let currentFlowPercent = 100;
-    let currentGW = 160.0;
+    let currentFlowPercent = 98;
+    let currentGW = 157.1;
     
     // Audio Context State
     let audioCtx = null;
@@ -238,9 +238,8 @@
       initChart();
       selectProvince('ALL');
 
-      // Auto Live Simulation Loop
+      // Auto Live Telemetry Fluctuation Loop
       setInterval(() => {
-        // Minor natural grid fluctuation between 90% and 100% capacity
         const randomPercent = Math.floor(Math.random() * 11) + 90;
         updateRegionFlow(activeRegionKey, randomPercent);
       }, 6000);
@@ -296,7 +295,7 @@
       const capPercentElem = document.getElementById('capacityPercentText');
 
       const timeString = new Date().toLocaleTimeString();
-      document.getElementById('timestampText').innerText = `Updated: ${timeString}`;
+      document.getElementById('timestampText').innerText = `Last Updated: ${timeString}`;
 
       if (currentFlowPercent >= 85) {
         textElem.innerText = `${currentGW} GW (${currentFlowPercent}% - Normal)`;
@@ -433,7 +432,7 @@
         banner.classList.add('bg-emerald-950/60', 'border-emerald-800', 'text-emerald-200');
         dot.className = "w-4 h-4 rounded-full bg-emerald-400";
         title.innerText = `${regName}: Optimal Output (${currentGW} GW)`;
-        desc.innerText = "Transmission lines and capacity levels are normal.";
+        desc.innerText = "Transmission lines and capacity levels are optimal.";
         badge.className = "px-3 py-1 text-xs font-bold rounded uppercase bg-emerald-900 text-emerald-300";
         badge.innerText = "Optimal";
       } 
