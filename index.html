@@ -2,35 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Canada Electricity Flow & Provincial GW Monitor</title>
-  
 
-  <!-- Tailwind CSS & Chart.js -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Tailwind CSS & Chart.js (pinned versions) -->
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 
   <style>
-    @keyframes dash {
-      to { stroke-dashoffset: -40; }
-    }
-    .flow-line {
-      stroke-dasharray: 8;
-      animation: dash 1.5s linear infinite;
-    }
-    .pulse-red {
-      animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
+    :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+    @keyframes dash { to { stroke-dashoffset: -40; } }
+    .flow-line { stroke-dasharray: 8; animation: dash 1.5s linear infinite; }
+    .pulse-red { animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
 
   <!-- Header -->
-  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-50">
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky z-50" style="top: env(safe-area-inset-top, 0px);">
     <div class="max-w-7xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-4">
       <div class="flex items-center space-x-3">
         <div class="p-2 bg-red-600/20 text-red-500 rounded-lg border border-red-500/30">
@@ -39,12 +29,10 @@
           </svg>
         </div>
         <div>
-          <h1 class="text-xl font-bold tracking-tight">Canada Real-Time Provincial Grid Monitor</h1>
-          <p class="text-xs text-slate-400">Open Data Integration & Dynamic Audio Alarms</p>
+          <h1 class="text-xl font-bold tracking-tight">Canada Provincial Grid Monitor</h1>
+          <p class="text-xs text-slate-400">Simulated feed, seeded with published capacity data — not a live API</p>
         </div>
       </div>
-
-      <!-- Controls & Audio -->
       <div class="flex items-center space-x-3">
         <button id="audioToggleBtn" onclick="toggleAudio()" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-lg shadow-lg flex items-center space-x-2 transition">
           <svg id="audioIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -56,23 +44,29 @@
     </div>
   </header>
 
+  <!-- Disclosure banner -->
+  <div class="max-w-7xl mx-auto px-4 pt-4 w-full">
+    <div class="text-xs text-amber-200 bg-amber-950/40 border border-amber-800/60 rounded-lg px-3 py-2">
+      Browser-based pages can't make live connections to provincial utility systems (IESO, AESO, etc.) — that's a platform restriction, not a bug. Numbers below are real installed-capacity figures (CER / utility annual reports), with output simulated around them. See the note at the bottom for what a genuinely live version would need.
+    </div>
+  </div>
+
   <!-- Main Content Layout -->
   <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-    <!-- Left Column: Top Metrics, Alarm Banner & Interactive Map -->
+    <!-- Left Column -->
     <div class="lg:col-span-2 flex flex-col gap-6">
-      
 
-      <!-- Selected Region Metric Cards -->
+      <!-- Metric Cards -->
       <div class="grid grid-cols-3 gap-4">
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
           <p class="text-xs text-slate-400 font-medium uppercase tracking-wider" id="metricRegionTitle">National Grid</p>
-          <h3 id="currentGWText" class="text-2xl font-black text-emerald-400 mt-1">157.1 GW</h3>
+          <h3 id="currentGWText" class="text-2xl font-black text-emerald-400 mt-1">153.9 GW</h3>
           <span class="text-[10px] text-slate-500">Current Flow / Output</span>
         </div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
           <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Installed Max Capacity</p>
-          <h3 id="maxCapacityGWText" class="text-2xl font-black text-sky-400 mt-1">160.0 GW</h3>
+          <h3 id="maxCapacityGWText" class="text-2xl font-black text-sky-400 mt-1">157.0 GW</h3>
           <span class="text-[10px] text-slate-500" id="maxCapacitySub">Regional Total Limit</span>
         </div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
@@ -106,7 +100,6 @@
 
         <div class="relative w-full aspect-[16/9] bg-slate-950 rounded-lg border border-slate-800/80 overflow-hidden flex items-center justify-center">
           <svg viewBox="0 0 800 450" class="w-full h-full">
-            <!-- Intertie Lines -->
             <path d="M 120 180 L 230 200" stroke="#38bdf8" stroke-width="3" class="flow-line"/>
             <path d="M 230 200 L 330 220" stroke="#38bdf8" stroke-width="3" class="flow-line"/>
             <path d="M 330 220 L 430 230" stroke="#38bdf8" stroke-width="3" class="flow-line"/>
@@ -114,9 +107,7 @@
             <path d="M 530 260 L 640 250" stroke="#38bdf8" stroke-width="3" class="flow-line"/>
             <path d="M 640 250 L 720 280" stroke="#38bdf8" stroke-width="3" class="flow-line"/>
             <path d="M 720 280 L 760 300" stroke="#38bdf8" stroke-width="3" class="flow-line"/>
-            
 
-            <!-- Province Nodes -->
             <g transform="translate(120, 180)" onclick="selectProvince('BC')" class="cursor-pointer group">
               <circle r="18" id="node-BC" fill="#1e293b" stroke="#38bdf8" stroke-width="2" class="group-hover:scale-125 transition-all"/>
               <text text-anchor="middle" dy="4" fill="#f8fafc" font-size="11" font-weight="bold">BC</text>
@@ -154,42 +145,38 @@
       </div>
     </div>
 
-    <!-- Right Column: Controls, Provincial Selector & Fuel Mix -->
+    <!-- Right Column -->
     <div class="flex flex-col gap-6">
 
-      <!-- Province Switcher & Simulator Bench -->
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
         <div class="flex justify-between items-center mb-3">
           <h2 class="text-lg font-semibold text-slate-200">Regional Flow Controller</h2>
           <button onclick="selectProvince('ALL')" class="text-xs text-sky-400 hover:underline">Reset to National</button>
         </div>
-        
 
-        <!-- Dropdown Selector -->
         <label class="block text-xs text-slate-400 mb-1">Select Active Region:</label>
         <select id="provinceSelect" onchange="selectProvince(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm font-semibold text-slate-200 mb-4 focus:ring-2 focus:ring-blue-500">
-          <option value="ALL">All Canada (National Grid - 160.0 GW Max)</option>
-          <option value="QC">Quebec (QC - Max 46.5 GW)</option>
-          <option value="ON">Ontario (ON - Max 38.2 GW)</option>
+          <option value="ALL">All Canada (National Grid - 157.0 GW Max)</option>
+          <option value="QC">Quebec (QC - Max 47.3 GW)</option>
+          <option value="ON">Ontario (ON - Max 38.6 GW)</option>
           <option value="BC">British Columbia (BC - Max 18.5 GW)</option>
-          <option value="AB">Alberta (AB - Max 19.1 GW)</option>
-          <option value="MB">Manitoba (MB - Max 6.2 GW)</option>
-          <option value="NL">Newfoundland & Labrador (NL - Max 7.8 GW)</option>
-          <option value="SK">Saskatchewan (SK - Max 4.6 GW)</option>
-          <option value="NB">New Brunswick (NB - Max 4.4 GW)</option>
-          <option value="NS">Nova Scotia (NS - Max 2.5 GW)</option>
+          <option value="AB">Alberta (AB - Max 23.1 GW)</option>
+          <option value="MB">Manitoba (MB - Max 6.8 GW)</option>
+          <option value="NL">Newfoundland & Labrador (NL - Max 8.7 GW)</option>
+          <option value="SK">Saskatchewan (SK - Max 6.1 GW)</option>
+          <option value="NB">New Brunswick (NB - Max 4.8 GW)</option>
+          <option value="NS">Nova Scotia (NS - Max 3.1 GW)</option>
         </select>
 
         <div class="space-y-4 border-t border-slate-800/80 pt-4">
           <div>
             <div class="flex justify-between text-sm mb-1">
               <span class="text-slate-400">Current Output Flow:</span>
-              <span id="flowValueText" class="font-bold text-emerald-400">157.1 GW (98%)</span>
+              <span id="flowValueText" class="font-bold text-emerald-400">153.9 GW (98%)</span>
             </div>
             <input type="range" id="flowSlider" min="0" max="100" value="98" step="1" oninput="manualOverridePercent(this.value)" class="w-full accent-blue-500 bg-slate-800 rounded-lg h-2 cursor-pointer">
           </div>
 
-          <!-- Alarm Presets -->
           <div class="grid grid-cols-4 gap-2 text-xs font-medium">
             <button onclick="setPercentPreset(100)" class="py-2 bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded">Normal</button>
             <button onclick="setPercentPreset(75)" class="py-2 bg-yellow-950/60 hover:bg-yellow-900 text-yellow-300 border border-yellow-800 rounded">Below (5s)</button>
@@ -199,7 +186,6 @@
         </div>
       </div>
 
-      <!-- Specific Provincial Fuel Mix Chart -->
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
         <h2 id="chartTitle" class="text-lg font-semibold text-slate-200 mb-4">National Fuel Mix Breakdown</h2>
         <div class="w-full aspect-square max-h-[210px] mx-auto">
@@ -207,31 +193,34 @@
         </div>
       </div>
 
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-xs text-slate-400 leading-relaxed">
+        <p class="font-semibold text-slate-300 mb-1">Why isn't this "live"?</p>
+        <p>Published pages run in a sandbox that only allows outbound network calls to a short list of script hosts — direct fetches to IESO, AESO, Hydro-Québec, etc. are blocked for security, so no page built this way can poll them in real time. A truly live version needs a small backend you host yourself (e.g. a Claude Code project) that pulls each utility's public report and re-serves it as JSON with CORS enabled; this page could then poll that backend. Happy to build that backend if you want it.</p>
+      </div>
+
     </div>
   </main>
 
   <script>
-    // Real Installed Capacity (GW) & Specific Energy Mix Data per Province
+    // Installed capacity (GW, ~2024-2025, CER / provincial utility annual reports) and
+    // an approximate capacity-weighted fuel mix per region: [Hydro, Nuclear, Wind/Solar, Gas/Oil, Coal]
     const PROVINCE_DATA = {
-      ALL: { name: "National Canada Grid", capacityGW: 160.0, mix: [60, 15, 8, 12, 5] },
-      QC:  { name: "Quebec Grid",          capacityGW: 46.5,  mix: [94, 0, 5, 1, 0] },
-      ON:  { name: "Ontario Grid",         capacityGW: 38.2,  mix: [25, 54, 11, 10, 0] },
-      BC:  { name: "British Columbia Grid",capacityGW: 18.5,  mix: [88, 0, 8, 4, 0] },
-      AB:  { name: "Alberta Grid",         capacityGW: 19.1,  mix: [4, 0, 25, 63, 8] },
-      MB:  { name: "Manitoba Grid",        capacityGW: 6.2,   mix: [97, 0, 3, 0, 0] },
-      NL:  { name: "Newfoundland & Lab.",  capacityGW: 7.8,   mix: [96, 0, 1, 3, 0] },
-      SK:  { name: "Saskatchewan Grid",    capacityGW: 4.6,   mix: [14, 0, 9, 45, 32] },
-      NB:  { name: "New Brunswick Grid",   capacityGW: 4.4,   mix: [22, 38, 11, 14, 15] },
-      NS:  { name: "Nova Scotia Grid",     capacityGW: 2.5,   mix: [10, 0, 14, 40, 36] }
+      ALL: { name: "National Canada Grid", capacityGW: 157.0, mix: [55, 13, 9, 20, 3] },
+      QC:  { name: "Quebec Grid",          capacityGW: 47.3,  mix: [95, 0, 4, 1, 0] },
+      ON:  { name: "Ontario Grid",         capacityGW: 38.6,  mix: [24, 52, 13, 11, 0] },
+      BC:  { name: "British Columbia Grid",capacityGW: 18.5,  mix: [89, 0, 7, 4, 0] },
+      AB:  { name: "Alberta Grid",         capacityGW: 23.1,  mix: [3, 0, 32, 65, 0] },
+      MB:  { name: "Manitoba Grid",        capacityGW: 6.8,   mix: [97, 0, 3, 0, 0] },
+      NL:  { name: "Newfoundland & Lab.",  capacityGW: 8.7,   mix: [97, 0, 1, 2, 0] },
+      SK:  { name: "Saskatchewan Grid",    capacityGW: 6.1,   mix: [12, 0, 14, 50, 24] },
+      NB:  { name: "New Brunswick Grid",   capacityGW: 4.8,   mix: [20, 14, 10, 36, 20] },
+      NS:  { name: "Nova Scotia Grid",     capacityGW: 3.1,   mix: [8, 0, 16, 36, 40] }
     };
 
-    // Current Active State
     let activeRegionKey = 'ALL';
     let currentFlowPercent = 98;
-    let currentGW = 157.1;
-    
+    let currentGW = ((PROVINCE_DATA.ALL.capacityGW * 98) / 100).toFixed(1);
 
-    // Audio Context State
     let audioCtx = null;
     let isAudioEnabled = false;
     let alarmInterval = null;
@@ -243,82 +232,75 @@
       initChart();
       selectProvince('ALL');
 
-      // Auto Live Telemetry Fluctuation Loop
+      // Simulated telemetry fluctuation loop (not a live feed — see disclosure above)
       setInterval(() => {
         const randomPercent = Math.floor(Math.random() * 11) + 90;
         updateRegionFlow(activeRegionKey, randomPercent);
       }, 6000);
     });
 
-    // Select Province Function
     function selectProvince(key) {
       if (!PROVINCE_DATA[key]) return;
       activeRegionKey = key;
 
-      // Highlight active node in SVG map
       document.querySelectorAll('circle[id^="node-"]').forEach(c => {
         c.setAttribute('stroke', '#38bdf8');
         c.setAttribute('stroke-width', '2');
       });
-      const activeCircle = document.getElementById(node-${key});
+      const activeCircle = document.getElementById(`node-${key}`);
       if (activeCircle) {
         activeCircle.setAttribute('stroke', '#f59e0b');
         activeCircle.setAttribute('stroke-width', '4');
       }
 
-      // Sync dropdown select element
       document.getElementById('provinceSelect').value = key;
 
-      // Update Region Titles & Max Capacity Cards
       const reg = PROVINCE_DATA[key];
       document.getElementById('metricRegionTitle').innerText = reg.name;
-      document.getElementById('maxCapacityGWText').innerText = ${reg.capacityGW.toFixed(1)} GW;
-      document.getElementById('chartTitle').innerText = ${reg.name} Fuel Mix;
+      document.getElementById('maxCapacityGWText').innerText = `${reg.capacityGW.toFixed(1)} GW`;
+      document.getElementById('chartTitle').innerText = `${reg.name} Fuel Mix`;
 
-      // Update Chart Breakdown for that specific province
       if (genChart) {
-        genChart.data.datasets.data = reg.mix;
+        genChart.data.datasets[0].data = reg.mix;
         genChart.update();
       }
 
-      // Refresh Flow Display
       updateRegionFlow(key, currentFlowPercent);
     }
 
-    // Dynamic Flow Calculation for Active Region
     function updateRegionFlow(key, loadPercent) {
       currentFlowPercent = parseInt(loadPercent);
       const reg = PROVINCE_DATA[key];
       currentGW = ((reg.capacityGW * currentFlowPercent) / 100).toFixed(1);
 
       document.getElementById('flowSlider').value = currentFlowPercent;
-      document.getElementById('currentGWText').innerText = ${currentGW} GW;
-      document.getElementById('capacityPercentText').innerText = ${currentFlowPercent}%;
+      document.getElementById('currentGWText').innerText = `${currentGW} GW`;
+      document.getElementById('capacityPercentText').innerText = `${currentFlowPercent}%`;
 
       const textElem = document.getElementById('flowValueText');
       const gwElem = document.getElementById('currentGWText');
       const capPercentElem = document.getElementById('capacityPercentText');
 
       const timeString = new Date().toLocaleTimeString();
-      document.getElementById('timestampText').innerText = Last Updated: ${timeString};
+      document.getElementById('timestampText').innerText = `Last Updated: ${timeString}`;
 
       if (currentFlowPercent >= 85) {
-        textElem.innerText = ${currentGW} GW (${currentFlowPercent}% - Normal);
+        textElem.innerText = `${currentGW} GW (${currentFlowPercent}% - Normal)`;
         textElem.className = "font-bold text-emerald-400";
         gwElem.className = "text-2xl font-black text-emerald-400 mt-1";
         capPercentElem.className = "text-2xl font-black text-emerald-400 mt-1";
       } else if (currentFlowPercent >= 65) {
-        textElem.innerText = ${currentGW} GW (${currentFlowPercent}% - 5s Beep);
+        textElem.innerText = `${currentGW} GW (${currentFlowPercent}% - 5s Beep)`;
         textElem.className = "font-bold text-yellow-400";
         gwElem.className = "text-2xl font-black text-yellow-400 mt-1";
         capPercentElem.className = "text-2xl font-black text-yellow-400 mt-1";
       } else if (currentFlowPercent > 0) {
-        textElem.innerText = ${currentGW} GW (${currentFlowPercent}% - Rapid Beep);
+        textElem.innerText = `${currentGW} GW (${currentFlowPercent}% - Rapid Beep)`;
         textElem.className = "font-bold text-orange-400";
         gwElem.className = "text-2xl font-black text-orange-400 mt-1";
         capPercentElem.className = "text-2xl font-black text-orange-400 mt-1";
       } else {
-        textElem.innerText = 0.0 GW (0% - GRID DOWN / Flatline);
+        textElem.innerText = "0.0 GW (0% - GRID DOWN / Flatline)";
         textElem.className = "font-bold text-red-500 pulse-red";
         gwElem.className = "text-2xl font-black text-red-500 mt-1 pulse-red";
         capPercentElem.className = "text-2xl font-black text-red-500 mt-1 pulse-red";
@@ -336,7 +318,6 @@
       updateRegionFlow(activeRegionKey, val);
     }
 
-    // Toggle Audio Context
     function toggleAudio() {
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -362,22 +343,17 @@
       }
     }
 
-    // Tone Generators
     function playBeep(freq = 440, duration = 0.18, type = 'sine') {
       if (!isAudioEnabled || !audioCtx) return;
       try {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
-
         osc.type = type;
         osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-
         gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-
         osc.start();
         osc.stop(audioCtx.currentTime + duration);
       } catch (e) {}
@@ -388,15 +364,11 @@
       try {
         flatlineOscillator = audioCtx.createOscillator();
         flatlineGain = audioCtx.createGain();
-
         flatlineOscillator.type = 'sawtooth';
         flatlineOscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
-
         flatlineGain.gain.setValueAtTime(0.18, audioCtx.currentTime);
-
         flatlineOscillator.connect(flatlineGain);
         flatlineGain.connect(audioCtx.destination);
-
         flatlineOscillator.start();
       } catch (e) {}
     }
@@ -420,7 +392,6 @@
       stopFlatline();
     }
 
-    // Alarm Evaluator
     function evaluateAlarmState() {
       stopAllAudio();
 
@@ -436,7 +407,7 @@
       if (currentFlowPercent >= 85) {
         banner.classList.add('bg-emerald-950/60', 'border-emerald-800', 'text-emerald-200');
         dot.className = "w-4 h-4 rounded-full bg-emerald-400";
-        title.innerText = ${regName}: Optimal Output (${currentGW} GW);
+        title.innerText = `${regName}: Optimal Output (${currentGW} GW)`;
         desc.innerText = "Transmission lines and capacity levels are optimal.";
         badge.className = "px-3 py-1 text-xs font-bold rounded uppercase bg-emerald-900 text-emerald-300";
         badge.innerText = "Optimal";
@@ -444,7 +415,7 @@
       else if (currentFlowPercent >= 65 && currentFlowPercent < 85) {
         banner.classList.add('bg-yellow-950/60', 'border-yellow-800', 'text-yellow-200');
         dot.className = "w-4 h-4 rounded-full bg-yellow-400";
-        title.innerText = ${regName}: Below Normal (${currentGW} GW);
+        title.innerText = `${regName}: Below Normal (${currentGW} GW)`;
         desc.innerText = "Alert: Grid throughput low. Beeping once every 5 seconds.";
         badge.className = "px-3 py-1 text-xs font-bold rounded uppercase bg-yellow-900 text-yellow-300";
         badge.innerText = "Below Normal";
@@ -457,7 +428,7 @@
       else if (currentFlowPercent > 0 && currentFlowPercent < 65) {
         banner.classList.add('bg-orange-950/60', 'border-orange-800', 'text-orange-200');
         dot.className = "w-4 h-4 rounded-full bg-orange-400 pulse-red";
-        title.innerText = ${regName}: Low Capacity Warning (${currentGW} GW);
+        title.innerText = `${regName}: Low Capacity Warning (${currentGW} GW)`;
         desc.innerText = "Critical deficit detected. Rapid warning beeps active.";
         badge.className = "px-3 py-1 text-xs font-bold rounded uppercase bg-orange-900 text-orange-300";
         badge.innerText = "Low Flow";
@@ -472,7 +443,7 @@
       else {
         banner.classList.add('bg-red-950/60', 'border-red-800', 'text-red-200', 'pulse-red');
         dot.className = "w-4 h-4 rounded-full bg-red-500";
-        title.innerText = CRITICAL ALERT: ${regName.toUpperCase()} GRID DOWN;
+        title.innerText = `CRITICAL ALERT: ${regName.toUpperCase()} GRID DOWN`;
         desc.innerText = "Zero pulse detected (0.0 GW). Continuous flatline tone active.";
         badge.className = "px-3 py-1 text-xs font-bold rounded uppercase bg-red-900 text-red-300";
         badge.innerText = "GRID DOWN";
@@ -503,7 +474,6 @@
       });
     }
 
-    // Chart Initialization
     function initChart() {
       const ctx = document.getElementById('generationChart').getContext('2d');
       genChart = new Chart(ctx, {
@@ -531,5 +501,3 @@
   </script>
 </body>
 </html>
-
-
