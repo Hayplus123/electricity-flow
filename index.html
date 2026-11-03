@@ -181,8 +181,7 @@
   </main>
 
   <script>
-    // Use your own backend route in production, e.g. "/api/ieso/gen-output".
-    // The public proxy is for local experimentation only.
+    // Public proxy for local experimentation. Replace with your own backend in production.
     const PROXY_BASE = "https://api.allorigins.win/raw?url=";
     const IESO_REPORT_URL =
       "https://reports-public.ieso.ca/public/GenOutputbyFuelHourly/PUB_GenOutputbyFuelHourly.xml";
@@ -201,7 +200,7 @@
     document.addEventListener("DOMContentLoaded", () => {
       initChart();
       fetchIESOData();
-      setInterval(fetchIESOData, 10 * 60 * 1000);
+      setInterval(fetchIESOData, 10 * 60 * 1000); // refresh every 10 minutes
     });
 
     async function fetchIESOData() {
@@ -216,7 +215,7 @@
       refreshButton.classList.add("opacity-50", "cursor-not-allowed");
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
+      const timeout = setTimeout(() => controller.abort(), 45000); // large yearly file
 
       try {
         const requestUrl = PROXY_BASE + encodeURIComponent(IESO_REPORT_URL);
@@ -290,6 +289,21 @@
       }
     }
 
+    /**
+     * Parse the real IESO GenOutputbyFuelHourly schema.
+     * Structure:
+     *   <DailyData>
+     *     <Day>YYYY-MM-DD</Day>
+     *     <HourlyData>
+     *       <Hour>1..24</Hour>
+     *       <FuelTotal>
+     *         <Fuel>NUCLEAR</Fuel>
+     *         <EnergyValue><Output>1234</Output></EnergyValue>
+     *       </FuelTotal>
+     *       ...
+     *     </HourlyData>
+     *   </DailyData>
+     */
     function parseIesoReport(xmlText) {
       const parser = new DOMParser();
       const xml = parser.parseFromString(xmlText, "text/xml");
@@ -298,31 +312,43 @@
         throw new Error("IESO returned invalid XML");
       }
 
-      const deliveryDate =
-        xml.getElementsByTagName("DeliveryDate")[0]?.textContent?.trim() || "Unknown date";
-      const deliveryHour =
-        xml.getElementsByTagName("DeliveryHour")[0]?.textContent?.trim() || "--";
+      // Namespace-agnostic tag lookup
+      const byLocalName = (root, name) =>
+        Array.from(root.getElementsByTagName("*")).filter(
+          (n) => n.localName === name || n.tagName === name
+        );
+
+      const dailyBlocks = byLocalName(xml, "DailyData");
+      if (!dailyBlocks.length) {
+        throw new Error("No DailyData elements found");
+      }
+
+      // Use the most recent day that contains hourly data
+      const lastDay = dailyBlocks[dailyBlocks.length - 1];
+      const dayNode = byLocalName(lastDay, "Day")[0];
+      const deliveryDate = dayNode?.textContent?.trim() || "Unknown date";
+
+      const hourlyBlocks = byLocalName(lastDay, "HourlyData");
+      if (!hourlyBlocks.length) {
+        throw new Error("No HourlyData elements found");
+      }
+
+      // Latest hour of that day
+      const lastHourBlock = hourlyBlocks[hourlyBlocks.length - 1];
+      const hourNode = byLocalName(lastHourBlock, "Hour")[0];
+      const deliveryHour = hourNode?.textContent?.trim() || "--";
 
       const fuels = {};
       let totalMW = 0;
 
-      // Flexible matching for IESO fuel/output records.
-      const fuelTypeNodes = Array.from(xml.getElementsByTagName("*")).filter(
-        node => node.tagName.toLowerCase() === "fueltype"
-      );
+      byLocalName(lastHourBlock, "FuelTotal").forEach((ft) => {
+        const fuelNode = byLocalName(ft, "Fuel")[0];
+        const fuelName = (fuelNode?.textContent || "UNKNOWN").trim().toUpperCase();
 
-      if (!fuelTypeNodes.length) {
-        throw new Error("No IESO fuel-type records found");
-      }
-
-      fuelTypeNodes.forEach(fuelNode => {
-        const fuelName =
-          fuelNode.textContent?.trim().toUpperCase() || "UNKNOWN";
-
-        let outputNode = fuelNode.parentElement?.getElementsByTagName("Output")[0];
-        if (!outputNode) {
-          outputNode = fuelNode.parentElement?.getElementsByTagName("OUTPUT")[0];
-        }
+        // Output lives under EnergyValue > Output
+        const outputNode =
+          byLocalName(ft, "Output")[0] ||
+          byLocalName(ft, "OUTPUT")[0];
 
         const outputMW = Number.parseFloat(outputNode?.textContent ?? "NaN");
 
@@ -367,10 +393,17 @@
       if (!chart) return;
 
       const labels = Object.keys(fuels);
-      const values = Object.values(fuels).map(value => Math.round(value));
+      const values = Object.values(fuels).map((value) => Math.round(value));
+
+      // Simple colour palette
+      const colours = [
+        "#34d399", "#60a5fa", "#fbbf24", "#f87171",
+        "#a78bfa", "#fb923c", "#2dd4bf", "#e879f9"
+      ];
 
       chart.data.labels = labels;
       chart.data.datasets[0].data = values;
+      chart.data.datasets[0].backgroundColor = labels.map((_, i) => colours[i % colours.length]);
       chart.update();
     }
 
@@ -480,7 +513,7 @@
         oscillator.start();
         oscillator.stop(audioContext.currentTime + duration);
       } catch {
-        // Ignore audio errors; they should not break the dashboard.
+        // Ignore audio errors
       }
     }
 
@@ -499,7 +532,7 @@
         gain.connect(audioContext.destination);
         flatlineOscillator.start();
       } catch {
-        // Ignore audio errors.
+        // Ignore audio errors
       }
     }
 
@@ -510,7 +543,7 @@
         flatlineOscillator.stop();
         flatlineOscillator.disconnect();
       } catch {
-        // Ignore audio errors.
+        // Ignore audio errors
       }
 
       flatlineOscillator = null;
