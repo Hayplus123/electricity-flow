@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ontario IESO Generator Output Monitor</title>
+  <title>Ontario IESO Live Grid Monitor</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -24,164 +24,126 @@
     <div class="max-w-7xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-4">
       <div>
         <h1 class="text-lg font-bold text-white flex items-center gap-2">
-          Ontario IESO Generator Output Monitor
+          Ontario IESO Live Grid Monitor
           <span id="modeBadge" class="text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded-full">
             CONNECTING
           </span>
         </h1>
         <p class="text-xs text-slate-400">
-          Independent Electricity System Operator — hourly generator output by fuel type
+          Independent Electricity System Operator — 5-minute demand + hourly supply mix
         </p>
       </div>
 
       <div class="flex items-center gap-3">
         <button
           id="refreshBtn"
-          onclick="fetchIESOData()"
+          onclick="fetchAllData()"
           class="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold"
         >
-          Refresh IESO Report
+          Refresh Now
         </button>
-
-        <button
-          id="audioToggleBtn"
-          onclick="toggleAudio()"
-          class="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-xl text-xs font-semibold text-white"
-        >
-          <span id="audioBtnText">Enable Audio Alarms</span>
-        </button>
+        <span id="lastUpdateText" class="text-[10px] text-slate-500 font-mono">—</span>
       </div>
     </div>
   </header>
 
-  <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <section class="lg:col-span-2 space-y-6">
-      <div class="space-y-2">
-        <div class="flex justify-between items-center px-1">
-          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Latest Published IESO Report
-          </span>
-          <span class="text-[10px] font-bold text-amber-300 bg-amber-950/60 border border-amber-800/60 px-2.5 py-0.5 rounded-full">
-            HOURLY REPORT — NOT REAL-TIME SCADA
-          </span>
-        </div>
+  <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full space-y-6">
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-            <p class="text-xs uppercase tracking-wider text-slate-400">Total Generator Output</p>
-            <h2 id="totalOutputText" class="text-2xl font-black text-emerald-400 mt-1">-- MW</h2>
-            <p class="text-[10px] text-slate-500">Sum of reported fuel-type output</p>
-          </div>
-
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-            <p class="text-xs uppercase tracking-wider text-slate-400">Reference Capacity</p>
-            <h2 class="text-2xl font-black text-sky-400 mt-1">38.2 GW</h2>
-            <p class="text-[10px] text-slate-500">Fixed reference value — not live available capability</p>
-          </div>
-
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-            <p class="text-xs uppercase tracking-wider text-slate-400">Installed Capacity Ratio</p>
-            <h2 id="utilizationText" class="text-2xl font-black text-blue-400 mt-1">--%</h2>
-            <p class="text-[10px] text-slate-500">Generation ÷ fixed reference capacity</p>
-          </div>
-        </div>
+    <!-- Top metrics -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+        <p class="text-xs uppercase tracking-wider text-slate-400">Ontario Demand</p>
+        <h2 id="ontarioDemandText" class="text-2xl font-black text-emerald-400 mt-1">-- MW</h2>
+        <p class="text-[10px] text-slate-500">Load served within Ontario</p>
       </div>
 
-      <div
-        id="alarmBanner"
-        class="p-4 rounded-2xl border bg-slate-900 border-slate-800 text-slate-200 flex items-center justify-between"
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+        <p class="text-xs uppercase tracking-wider text-slate-400">Market Demand</p>
+        <h2 id="marketDemandText" class="text-2xl font-black text-sky-400 mt-1">-- MW</h2>
+        <p class="text-[10px] text-slate-500">Total energy (incl. exports)</p>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+        <p class="text-xs uppercase tracking-wider text-slate-400">Total Generation</p>
+        <h2 id="totalGenText" class="text-2xl font-black text-blue-400 mt-1">-- MW</h2>
+        <p class="text-[10px] text-slate-500">Sum of reported fuel output</p>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+        <p class="text-xs uppercase tracking-wider text-slate-400">Installed Capacity Ratio</p>
+        <h2 id="utilizationText" class="text-2xl font-black text-violet-400 mt-1">--%</h2>
+        <p class="text-[10px] text-slate-500">Generation ÷ 38.2 GW reference</p>
+      </div>
+    </div>
+
+    <!-- Status banner -->
+    <div
+      id="statusBanner"
+      class="p-4 rounded-2xl border bg-slate-900 border-slate-800 text-slate-200 flex items-center justify-between"
+    >
+      <div class="flex items-center gap-3">
+        <div id="statusDot" class="w-3.5 h-3.5 rounded-full bg-slate-500"></div>
+        <div>
+          <h3 id="statusTitle" class="font-bold">Waiting for IESO data</h3>
+          <p id="statusDescription" class="text-xs text-slate-400">
+            Pulling 5-minute demand and hourly supply mix…
+          </p>
+        </div>
+      </div>
+      <span
+        id="statusBadge"
+        class="px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-slate-800 text-slate-300 border border-slate-700"
       >
-        <div class="flex items-center gap-3">
-          <div id="alarmDot" class="w-3.5 h-3.5 rounded-full bg-slate-500"></div>
-          <div>
-            <h3 id="alarmTitle" class="font-bold">Waiting for IESO report</h3>
-            <p id="alarmDescription" class="text-xs text-slate-400">
-              This dashboard reflects the latest published hourly generator-output report.
-            </p>
-          </div>
-        </div>
+        Waiting
+      </span>
+    </div>
 
-        <span
-          id="alarmBadge"
-          class="px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-slate-800 text-slate-300 border border-slate-700"
-        >
-          Waiting
-        </span>
-      </div>
-
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Fuel mix list -->
+      <section class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5">
         <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-          <h2 class="text-sm font-bold">IESO Generator Output by Fuel</h2>
+          <h2 class="text-sm font-bold">Supply Mix by Fuel</h2>
           <span
-            id="timestampText"
+            id="fuelTimestampText"
             class="text-xs font-mono text-slate-400 bg-slate-950 border border-slate-800 px-3 py-1 rounded-full"
           >
             Report: --
           </span>
         </div>
-
-        <div
-          id="fuelOutputContainer"
-          class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono"
-        >
-          <p class="text-slate-400 italic">Requesting IESO report…</p>
+        <div id="fuelOutputContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
+          <p class="text-slate-400 italic">Requesting supply mix…</p>
         </div>
-      </div>
-    </section>
-
-    <aside class="space-y-6">
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-        <h2 class="text-base font-bold mb-1">Alarm Test Bench</h2>
-        <p class="text-xs text-slate-400 mb-4">
-          Overrides are for alarm testing only and do not alter IESO data.
+        <p class="text-[10px] text-slate-500 mt-4">
+          Fuel mix comes from the hourly Generator Output &amp; Capability report.
+          Demand figures update every ~5 minutes.
         </p>
+      </section>
 
-        <div class="flex justify-between text-xs mb-2">
-          <span class="text-slate-400">Test output level</span>
-          <span id="flowValueText" class="font-bold text-emerald-400">Live report active</span>
+      <!-- Chart -->
+      <aside class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+        <h2 class="text-base font-bold mb-3">Fuel Mix</h2>
+        <div class="relative w-full aspect-square max-h-[260px] mx-auto">
+          <canvas id="generationChart" role="img" aria-label="Ontario supply mix by fuel"></canvas>
         </div>
+      </aside>
+    </div>
 
-        <input
-          id="flowSlider"
-          type="range"
-          min="0"
-          max="100"
-          value="90"
-          class="w-full accent-blue-500"
-          oninput="manualOverridePercent(this.value)"
-        >
-
-        <div class="grid grid-cols-4 gap-2 mt-4 text-[11px] font-semibold">
-          <button onclick="resetToLive()" class="py-2 rounded-xl bg-blue-950/60 text-blue-300 border border-blue-800/60">
-            Live
-          </button>
-          <button onclick="setPercentPreset(35)" class="py-2 rounded-xl bg-yellow-950/60 text-yellow-300 border border-yellow-800/60">
-            Advisory
-          </button>
-          <button onclick="setPercentPreset(18)" class="py-2 rounded-xl bg-orange-950/60 text-orange-300 border border-orange-800/60">
-            Low
-          </button>
-          <button onclick="setPercentPreset(0)" class="py-2 rounded-xl bg-red-950/60 text-red-300 border border-red-800/60">
-            Flatline
-          </button>
-        </div>
+    <!-- Demand interval detail -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+        <h2 class="text-sm font-bold">5-Minute Demand Intervals (current hour)</h2>
+        <span id="demandTimestampText" class="text-xs font-mono text-slate-400">—</span>
       </div>
-
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-        <h2 id="chartTitle" class="text-base font-bold mb-3">IESO Fuel Mix</h2>
-        <div class="relative w-full aspect-square max-h-[240px] mx-auto">
-          <canvas
-            id="generationChart"
-            role="img"
-            aria-label="Ontario generator output by fuel type"
-          ></canvas>
-        </div>
+      <div id="intervalTable" class="overflow-x-auto text-xs font-mono">
+        <p class="text-slate-400 italic">Loading intervals…</p>
       </div>
-    </aside>
+    </div>
   </main>
 
   <script>
-    const IESO_REPORT_URL =
+    const REALTIME_URL =
+      "https://reports-public.ieso.ca/public/RealtimeTotals/PUB_RealtimeTotals.xml";
+    const FUEL_URL =
       "https://reports-public.ieso.ca/public/GenOutputCapability/PUB_GenOutputCapability.xml";
 
     const PROXIES = [
@@ -191,7 +153,6 @@
 
     const REFERENCE_CAPACITY_GW = 38.2;
 
-    // Stable colours by fuel type
     const FUEL_COLOURS = {
       NUCLEAR: "#34d399",
       HYDRO:   "#60a5fa",
@@ -199,118 +160,177 @@
       WIND:    "#f87171",
       SOLAR:   "#a78bfa",
       BIOFUEL: "#fb923c",
-      OTHER:   "#2dd4bf"
+      OTHER:   "#2dd4bf",
+      STORAGE: "#e879f9"
     };
 
     let chart = null;
-    let audioContext = null;
-    let audioEnabled = false;
-    let alarmInterval = null;
-    let flatlineOscillator = null;
-    let flatlineGain = null;
-    let isLiveMode = true;
-    let currentOutputMW = null;
-    let sliderDebounce = null;
+    let lastOntarioDemand = null;
 
     document.addEventListener("DOMContentLoaded", () => {
       initChart();
-      fetchIESOData();
-      setInterval(fetchIESOData, 10 * 60 * 1000);
+      fetchAllData();
+      setInterval(fetchAllData, 60 * 1000); // every 60 seconds
     });
 
-    async function fetchIESOData() {
-      const badge = document.getElementById("modeBadge");
-      const refreshButton = document.getElementById("refreshBtn");
-      const container = document.getElementById("fuelOutputContainer");
-
-      badge.textContent = "FETCHING";
-      badge.className =
-        "text-[10px] font-bold bg-amber-950/60 text-amber-300 border border-amber-800/60 px-2 py-0.5 rounded-full";
-      refreshButton.disabled = true;
-      refreshButton.classList.add("opacity-50", "cursor-not-allowed");
-
+    async function fetchViaProxy(url, timeoutMs = 20000) {
       let lastError = null;
-
       for (const makeUrl of PROXIES) {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 25000);
-
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
         try {
-          const response = await fetch(makeUrl(IESO_REPORT_URL), {
+          const res = await fetch(makeUrl(url), {
             signal: controller.signal,
             cache: "no-store"
           });
           clearTimeout(timeout);
-
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-          const xmlText = await response.text();
-          const parsed = parseCapabilityReport(xmlText);
-
-          renderFuelOutput(parsed.fuels);
-          updateChart(parsed.fuels);
-
-          currentOutputMW = parsed.totalMW;
-          document.getElementById("totalOutputText").textContent =
-            `${Math.round(parsed.totalMW).toLocaleString()} MW`;
-
-          const utilization = Math.min(
-            100,
-            Math.round((parsed.totalMW / 1000 / REFERENCE_CAPACITY_GW) * 100)
-          );
-          document.getElementById("utilizationText").textContent = `${utilization}%`;
-          document.getElementById("flowSlider").value = utilization;
-          document.getElementById("flowValueText").textContent =
-            `${Math.round(parsed.totalMW).toLocaleString()} MW (${utilization}%)`;
-
-          document.getElementById("timestampText").textContent =
-            `Report: ${parsed.deliveryDate} · Hour Ending ${parsed.deliveryHour}`;
-
-          badge.textContent = "IESO REPORT CONNECTED";
-          badge.className =
-            "text-[10px] font-bold bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 px-2 py-0.5 rounded-full";
-
-          if (isLiveMode) evaluateAlarmState(utilization, parsed.totalMW);
-
-          refreshButton.disabled = false;
-          refreshButton.classList.remove("opacity-50", "cursor-not-allowed");
-          return;
-        } catch (error) {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const text = await res.text();
+          if (!text || text.length < 200) throw new Error("Empty response");
+          return text;
+        } catch (err) {
           clearTimeout(timeout);
-          lastError = error;
-          console.warn("Proxy attempt failed:", error.message);
+          lastError = err;
         }
       }
+      throw lastError || new Error("All proxies failed");
+    }
 
-      // All proxies failed
-      badge.textContent = "IESO UNAVAILABLE";
+    async function fetchAllData() {
+      const badge = document.getElementById("modeBadge");
+      const refreshBtn = document.getElementById("refreshBtn");
+
+      badge.textContent = "FETCHING";
       badge.className =
-        "text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded-full";
+        "text-[10px] font-bold bg-amber-950/60 text-amber-300 border border-amber-800/60 px-2 py-0.5 rounded-full";
+      refreshBtn.disabled = true;
+      refreshBtn.classList.add("opacity-50", "cursor-not-allowed");
 
-      container.innerHTML = "";
-      const notice = document.createElement("p");
-      notice.className = "text-amber-300 italic";
-      notice.textContent =
-        "IESO report could not be retrieved. No simulated generation values are shown.";
-      container.appendChild(notice);
+      try {
+        // Fetch both feeds in parallel
+        const [realtimeXml, fuelXml] = await Promise.all([
+          fetchViaProxy(REALTIME_URL, 15000),
+          fetchViaProxy(FUEL_URL, 25000)
+        ]);
 
-      document.getElementById("totalOutputText").textContent = "-- MW";
-      document.getElementById("utilizationText").textContent = "--%";
-      document.getElementById("timestampText").textContent = "Report: unavailable";
-      document.getElementById("flowValueText").textContent = "Unavailable";
+        const demand = parseRealtimeTotals(realtimeXml);
+        const fuel = parseCapabilityReport(fuelXml);
 
-      if (isLiveMode) evaluateAlarmState(null, null);
+        // Update demand cards
+        document.getElementById("ontarioDemandText").textContent =
+          `${Math.round(demand.ontarioDemand).toLocaleString()} MW`;
+        document.getElementById("marketDemandText").textContent =
+          `${Math.round(demand.marketDemand).toLocaleString()} MW`;
 
-      refreshButton.disabled = false;
-      refreshButton.classList.remove("opacity-50", "cursor-not-allowed");
+        lastOntarioDemand = demand.ontarioDemand;
+
+        document.getElementById("demandTimestampText").textContent =
+          `${demand.deliveryDate} · Hour ${demand.deliveryHour} · Interval ${demand.latestInterval}`;
+
+        renderIntervals(demand.intervals);
+
+        // Update fuel / generation
+        document.getElementById("totalGenText").textContent =
+          `${Math.round(fuel.totalMW).toLocaleString()} MW`;
+
+        const util = Math.min(
+          100,
+          Math.round((fuel.totalMW / 1000 / REFERENCE_CAPACITY_GW) * 100)
+        );
+        document.getElementById("utilizationText").textContent = `${util}%`;
+
+        document.getElementById("fuelTimestampText").textContent =
+          `Report: ${fuel.deliveryDate} · Hour Ending ${fuel.deliveryHour}`;
+
+        renderFuelOutput(fuel.fuels);
+        updateChart(fuel.fuels);
+
+        // Status
+        setStatus(
+          "connected",
+          `Ontario Demand ${Math.round(demand.ontarioDemand).toLocaleString()} MW`,
+          `5-min demand + hourly supply mix · last refresh ${new Date().toLocaleTimeString()}`
+        );
+
+        badge.textContent = "LIVE";
+        badge.className =
+          "text-[10px] font-bold bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 px-2 py-0.5 rounded-full";
+
+        document.getElementById("lastUpdateText").textContent =
+          `Updated ${new Date().toLocaleTimeString()}`;
+      } catch (err) {
+        console.warn("Fetch failed:", err);
+        setStatus(
+          "error",
+          "IESO data unavailable",
+          "Could not retrieve RealtimeTotals or GenOutputCapability."
+        );
+        badge.textContent = "UNAVAILABLE";
+        badge.className =
+          "text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded-full";
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.classList.remove("opacity-50", "cursor-not-allowed");
+      }
+    }
+
+    function parseRealtimeTotals(xmlText) {
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(xmlText, "text/xml");
+      if (xml.getElementsByTagName("parsererror").length) {
+        throw new Error("Invalid RealtimeTotals XML");
+      }
+
+      const byLocal = (root, name) =>
+        Array.from(root.getElementsByTagName("*")).filter(
+          (n) => n.localName === name || n.tagName === name
+        );
+
+      const deliveryDate =
+        byLocal(xml, "DeliveryDate")[0]?.textContent?.trim() || "Unknown";
+      const deliveryHour =
+        byLocal(xml, "DeliveryHour")[0]?.textContent?.trim() || "--";
+
+      const intervals = [];
+      byLocal(xml, "IntervalEnergy").forEach((block) => {
+        const interval = parseInt(
+          byLocal(block, "Interval")[0]?.textContent || "0",
+          10
+        );
+        let ontario = null;
+        let market = null;
+
+        byLocal(block, "MQ").forEach((mq) => {
+          const qty = byLocal(mq, "MarketQuantity")[0]?.textContent?.trim();
+          const mw = parseFloat(byLocal(mq, "EnergyMW")[0]?.textContent || "NaN");
+          if (!Number.isFinite(mw)) return;
+          if (qty === "ONTARIO DEMAND") ontario = mw;
+          if (qty === "Total Energy") market = mw;
+        });
+
+        if (ontario != null || market != null) {
+          intervals.push({ interval, ontario, market });
+        }
+      });
+
+      if (!intervals.length) throw new Error("No intervals found");
+
+      const latest = intervals[intervals.length - 1];
+      return {
+        deliveryDate,
+        deliveryHour,
+        latestInterval: latest.interval,
+        ontarioDemand: latest.ontario ?? 0,
+        marketDemand: latest.market ?? 0,
+        intervals
+      };
     }
 
     function parseCapabilityReport(xmlText) {
       const parser = new DOMParser();
       const xml = parser.parseFromString(xmlText, "text/xml");
-
       if (xml.getElementsByTagName("parsererror").length) {
-        throw new Error("Invalid XML");
+        throw new Error("Invalid GenOutputCapability XML");
       }
 
       const byLocal = (root, name) =>
@@ -319,17 +339,18 @@
         );
 
       if (!byLocal(xml, "Generator").length) {
-        throw new Error("No generator data found");
+        throw new Error("No generator data");
       }
 
-      const dateNode = byLocal(xml, "Date")[0];
-      const deliveryDate = dateNode?.textContent?.trim() || "Unknown";
+      const deliveryDate =
+        byLocal(xml, "Date")[0]?.textContent?.trim() || "Unknown";
 
-      const hourTotals = {}; // hour -> { fuel -> MW }
-
+      const hourTotals = {};
       byLocal(xml, "Generator").forEach((gen) => {
-        const fuelNode = byLocal(gen, "FuelType")[0];
-        const fuel = (fuelNode?.textContent || "UNKNOWN").trim().toUpperCase();
+        const fuel =
+          (byLocal(gen, "FuelType")[0]?.textContent || "UNKNOWN")
+            .trim()
+            .toUpperCase();
 
         byLocal(gen, "Output").forEach((out) => {
           const parent = out.parentNode || out.parentElement;
@@ -337,12 +358,8 @@
           const parentName = parent.localName || parent.tagName;
           if (parentName !== "Outputs") return;
 
-          const hourNode = byLocal(out, "Hour")[0];
-          const energyNode = byLocal(out, "EnergyMW")[0];
-          if (!hourNode || !energyNode) return;
-
-          const hour = parseInt(hourNode.textContent, 10);
-          const mw = parseFloat(energyNode.textContent);
+          const hour = parseInt(byLocal(out, "Hour")[0]?.textContent || "0", 10);
+          const mw = parseFloat(byLocal(out, "EnergyMW")[0]?.textContent || "NaN");
           if (!Number.isFinite(hour) || !Number.isFinite(mw) || mw < 0) return;
 
           if (!hourTotals[hour]) hourTotals[hour] = {};
@@ -350,29 +367,22 @@
         });
       });
 
-      const availableHours = Object.keys(hourTotals)
+      const hours = Object.keys(hourTotals)
         .map(Number)
         .sort((a, b) => b - a);
 
-      // Prefer the most recent hour that has a reasonable number of fuel types
-      // (avoids partial hours that are still being published)
-      const selectedHour =
-        availableHours.find((h) => Object.keys(hourTotals[h]).length >= 4) ||
-        availableHours[0];
+      const selected =
+        hours.find((h) => Object.keys(hourTotals[h]).length >= 4) || hours[0];
 
-      if (selectedHour == null) {
-        throw new Error("No usable hourly output data found");
-      }
+      if (selected == null) throw new Error("No usable hour");
 
-      const fuels = hourTotals[selectedHour];
+      const fuels = hourTotals[selected];
       let totalMW = 0;
       Object.values(fuels).forEach((v) => (totalMW += v));
 
-      if (totalMW <= 0) throw new Error("Total output is zero");
-
       return {
         deliveryDate,
-        deliveryHour: String(selectedHour),
+        deliveryHour: String(selected),
         fuels,
         totalMW
       };
@@ -402,16 +412,52 @@
         });
     }
 
+    function renderIntervals(intervals) {
+      const el = document.getElementById("intervalTable");
+      if (!intervals.length) {
+        el.innerHTML = "<p class='text-slate-400'>No intervals</p>";
+        return;
+      }
+
+      let html = `
+        <table class="w-full text-left">
+          <thead>
+            <tr class="text-slate-500 border-b border-slate-800">
+              <th class="py-1 pr-4">Interval</th>
+              <th class="py-1 pr-4">Ontario Demand</th>
+              <th class="py-1">Market Demand</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      // show newest first
+      [...intervals].reverse().forEach((row) => {
+        html += `
+          <tr class="border-b border-slate-800/60">
+            <td class="py-1.5 pr-4 text-slate-400">${row.interval}</td>
+            <td class="py-1.5 pr-4 text-emerald-400 font-semibold">${
+              row.ontario != null ? Math.round(row.ontario).toLocaleString() + " MW" : "—"
+            }</td>
+            <td class="py-1.5 text-sky-400 font-semibold">${
+              row.market != null ? Math.round(row.market).toLocaleString() + " MW" : "—"
+            }</td>
+          </tr>
+        `;
+      });
+
+      html += "</tbody></table>";
+      el.innerHTML = html;
+    }
+
     function updateChart(fuels) {
       if (!chart) return;
-
       const labels = Object.keys(fuels);
       const values = Object.values(fuels).map((v) => Math.round(v));
-
       chart.data.labels = labels;
       chart.data.datasets[0].data = values;
       chart.data.datasets[0].backgroundColor = labels.map(
-        (fuel) => FUEL_COLOURS[fuel] || "#64748b"
+        (f) => FUEL_COLOURS[f] || "#64748b"
       );
       chart.update();
     }
@@ -419,17 +465,11 @@
     function initChart() {
       const canvas = document.getElementById("generationChart");
       if (!canvas) return;
-
-      const ctx = canvas.getContext("2d");
-      chart = new Chart(ctx, {
+      chart = new Chart(canvas.getContext("2d"), {
         type: "doughnut",
         data: {
-          labels: ["Awaiting IESO report"],
-          datasets: [{
-            data: [1],
-            backgroundColor: ["#334155"],
-            borderWidth: 0
-          }]
+          labels: ["Awaiting data"],
+          datasets: [{ data: [1], backgroundColor: ["#334155"], borderWidth: 0 }]
         },
         options: {
           responsive: true,
@@ -437,192 +477,38 @@
           plugins: {
             legend: {
               position: "bottom",
-              labels: {
-                color: "#94a3b8",
-                boxWidth: 12,
-                font: { size: 11 }
-              }
+              labels: { color: "#94a3b8", boxWidth: 12, font: { size: 11 } }
             }
           }
         }
       });
     }
 
-    function resetToLive() {
-      isLiveMode = true;
-      fetchIESOData();
-    }
-
-    function manualOverridePercent(value) {
-      isLiveMode = false;
-      const percent = parseInt(value, 10);
-      const testMW = Math.round((percent / 100) * REFERENCE_CAPACITY_GW * 1000);
-
-      document.getElementById("totalOutputText").textContent =
-        `${testMW.toLocaleString()} MW`;
-      document.getElementById("utilizationText").textContent = `${percent}%`;
-      document.getElementById("flowValueText").textContent =
-        `${testMW.toLocaleString()} MW (${percent}% — override)`;
-
-      clearTimeout(sliderDebounce);
-      sliderDebounce = setTimeout(() => evaluateAlarmState(percent, testMW), 150);
-    }
-
-    function setPercentPreset(value) {
-      document.getElementById("flowSlider").value = value;
-      manualOverridePercent(value);
-    }
-
-    function toggleAudio() {
-      audioContext ??= new (window.AudioContext || window.webkitAudioContext)();
-      if (audioContext.state === "suspended") audioContext.resume();
-
-      audioEnabled = !audioEnabled;
-      const button = document.getElementById("audioToggleBtn");
-      const label = document.getElementById("audioBtnText");
-
-      if (audioEnabled) {
-        button.className =
-          "px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-xs font-semibold text-white";
-        label.textContent = "Audio Active";
-        evaluateAlarmState(
-          parseInt(document.getElementById("flowSlider").value, 10),
-          currentOutputMW
-        );
-      } else {
-        button.className =
-          "px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-xl text-xs font-semibold text-white";
-        label.textContent = "Enable Audio Alarms";
-        stopAllAudio();
-      }
-    }
-
-    function playBeep(frequency = 440, duration = 0.15) {
-      if (!audioEnabled || !audioContext) return;
-      try {
-        const osc = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(frequency, audioContext.currentTime);
-        gain.gain.setValueAtTime(0.08, audioContext.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
-        osc.connect(gain);
-        gain.connect(audioContext.destination);
-        osc.start();
-        osc.stop(audioContext.currentTime + duration);
-      } catch {}
-    }
-
-    function startFlatline() {
-      if (!audioEnabled || !audioContext || flatlineOscillator) return;
-      try {
-        flatlineOscillator = audioContext.createOscillator();
-        flatlineGain = audioContext.createGain();
-        flatlineOscillator.type = "sine";
-        flatlineOscillator.frequency.setValueAtTime(520, audioContext.currentTime);
-        flatlineGain.gain.setValueAtTime(0.06, audioContext.currentTime);
-        flatlineOscillator.connect(flatlineGain);
-        flatlineGain.connect(audioContext.destination);
-        flatlineOscillator.start();
-      } catch {}
-    }
-
-    function stopFlatline() {
-      if (!flatlineOscillator) return;
-      try {
-        flatlineOscillator.stop();
-        flatlineOscillator.disconnect();
-        if (flatlineGain) {
-          flatlineGain.disconnect();
-          flatlineGain = null;
-        }
-      } catch {}
-      flatlineOscillator = null;
-    }
-
-    function stopAllAudio() {
-      if (alarmInterval) {
-        clearInterval(alarmInterval);
-        alarmInterval = null;
-      }
-      stopFlatline();
-    }
-
-    function evaluateAlarmState(percent, outputMW) {
-      stopAllAudio();
-
-      const banner = document.getElementById("alarmBanner");
-      const title = document.getElementById("alarmTitle");
-      const description = document.getElementById("alarmDescription");
-      const badge = document.getElementById("alarmBadge");
-      const dot = document.getElementById("alarmDot");
+    function setStatus(kind, title, description) {
+      const banner = document.getElementById("statusBanner");
+      const dot = document.getElementById("statusDot");
+      const titleEl = document.getElementById("statusTitle");
+      const descEl = document.getElementById("statusDescription");
+      const badge = document.getElementById("statusBadge");
 
       banner.className =
         "p-4 rounded-2xl border flex items-center justify-between transition";
 
-      const outputLabel =
-        outputMW === null ? "unavailable" : `${Math.round(outputMW).toLocaleString()} MW`;
+      titleEl.textContent = title;
+      descEl.textContent = description;
 
-      if (percent === null) {
+      if (kind === "connected") {
+        banner.classList.add("bg-emerald-950/40", "border-emerald-800/60", "text-emerald-200");
+        dot.className = "w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-lg shadow-emerald-500/50";
+        badge.className =
+          "px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-emerald-900/80 text-emerald-300 border border-emerald-700/50";
+        badge.textContent = "Live";
+      } else {
         banner.classList.add("bg-slate-900", "border-slate-700", "text-slate-200");
         dot.className = "w-3.5 h-3.5 rounded-full bg-slate-500";
-        title.textContent = "IESO report unavailable";
-        description.textContent =
-          "No current generator-output value is available.";
         badge.className =
           "px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-slate-800 text-slate-300 border border-slate-700";
         badge.textContent = "Unavailable";
-        return;
-      }
-
-      // Realistic thresholds for Ontario installed-capacity ratio
-      if (percent >= 40) {
-        banner.classList.add("bg-emerald-950/40", "border-emerald-800/60", "text-emerald-200");
-        dot.className = "w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-lg shadow-emerald-500/50";
-        title.textContent = `Generation output monitor: ${outputLabel}`;
-        description.textContent =
-          "Installed-capacity ratio is at or above 40% (typical operating range).";
-        badge.className =
-          "px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-emerald-900/80 text-emerald-300 border border-emerald-700/50";
-        badge.textContent = "Normal";
-      } else if (percent >= 25) {
-        banner.classList.add("bg-yellow-950/40", "border-yellow-800/60", "text-yellow-200");
-        dot.className = "w-3.5 h-3.5 rounded-full bg-yellow-400 shadow-lg shadow-yellow-500/50";
-        title.textContent = `Capacity utilization advisory: ${outputLabel}`;
-        description.textContent =
-          "Installed-capacity ratio is 25–39%. Test alarm: one beep every five seconds.";
-        badge.className =
-          "px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-yellow-900/80 text-yellow-300 border border-yellow-700/50";
-        badge.textContent = "Advisory";
-        playBeep(440);
-        alarmInterval = setInterval(() => playBeep(440), 5000);
-      } else if (percent >= 10) {
-        banner.classList.add("bg-orange-950/40", "border-orange-800/60", "text-orange-200");
-        dot.className =
-          "w-3.5 h-3.5 rounded-full bg-orange-400 shadow-lg shadow-orange-500/50 animate-pulse-fast";
-        title.textContent = `Low reference utilization: ${outputLabel}`;
-        description.textContent =
-          "Installed-capacity ratio is 10–24%. Test alarm: rapid beeps.";
-        badge.className =
-          "px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-orange-900/80 text-orange-300 border border-orange-700/50";
-        badge.textContent = "Low utilization";
-        const rapidBeep = () => {
-          playBeep(580, 0.1);
-          setTimeout(() => playBeep(580, 0.1), 150);
-        };
-        rapidBeep();
-        alarmInterval = setInterval(rapidBeep, 1500);
-      } else {
-        banner.classList.add("bg-red-950/60", "border-red-800", "text-red-200", "animate-pulse");
-        dot.className =
-          "w-3.5 h-3.5 rounded-full bg-red-500 shadow-lg shadow-red-500/80 animate-pulse-fast";
-        title.textContent = `Near-zero utilization test: ${outputLabel}`;
-        description.textContent =
-          "Test override is below 10%. This does not indicate an actual Ontario grid failure.";
-        badge.className =
-          "px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-red-900 text-red-300 border border-red-700";
-        badge.textContent = "Near zero";
-        startFlatline();
       }
     }
   </script>
