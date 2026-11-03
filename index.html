@@ -80,9 +80,9 @@
           </div>
 
           <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-            <p class="text-xs uppercase tracking-wider text-slate-400">Output vs. Reference</p>
+            <p class="text-xs uppercase tracking-wider text-slate-400">Installed Capacity Ratio</p>
             <h2 id="utilizationText" class="text-2xl font-black text-blue-400 mt-1">--%</h2>
-            <p class="text-[10px] text-slate-500">Not an official load factor</p>
+            <p class="text-[10px] text-slate-500">Generation ÷ fixed reference capacity</p>
           </div>
         </div>
       </div>
@@ -155,11 +155,11 @@
           <button onclick="resetToLive()" class="py-2 rounded-xl bg-blue-950/60 text-blue-300 border border-blue-800/60">
             Live
           </button>
-          <button onclick="setPercentPreset(75)" class="py-2 rounded-xl bg-yellow-950/60 text-yellow-300 border border-yellow-800/60">
-            5s Beep
+          <button onclick="setPercentPreset(35)" class="py-2 rounded-xl bg-yellow-950/60 text-yellow-300 border border-yellow-800/60">
+            Advisory
           </button>
-          <button onclick="setPercentPreset(50)" class="py-2 rounded-xl bg-orange-950/60 text-orange-300 border border-orange-800/60">
-            Rapid
+          <button onclick="setPercentPreset(18)" class="py-2 rounded-xl bg-orange-950/60 text-orange-300 border border-orange-800/60">
+            Low
           </button>
           <button onclick="setPercentPreset(0)" class="py-2 rounded-xl bg-red-950/60 text-red-300 border border-red-800/60">
             Flatline
@@ -181,11 +181,9 @@
   </main>
 
   <script>
-    // Smaller, hourly-updated report (today's data)
     const IESO_REPORT_URL =
       "https://reports-public.ieso.ca/public/GenOutputCapability/PUB_GenOutputCapability.xml";
 
-    // Try these proxies in order
     const PROXIES = [
       (url) => `https://proxy.cors.dev/${url}`,
       (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
@@ -193,11 +191,23 @@
 
     const REFERENCE_CAPACITY_GW = 38.2;
 
+    // Stable colours by fuel type
+    const FUEL_COLOURS = {
+      NUCLEAR: "#34d399",
+      HYDRO:   "#60a5fa",
+      GAS:     "#fbbf24",
+      WIND:    "#f87171",
+      SOLAR:   "#a78bfa",
+      BIOFUEL: "#fb923c",
+      OTHER:   "#2dd4bf"
+    };
+
     let chart = null;
     let audioContext = null;
     let audioEnabled = false;
     let alarmInterval = null;
     let flatlineOscillator = null;
+    let flatlineGain = null;
     let isLiveMode = true;
     let currentOutputMW = null;
     let sliderDebounce = null;
@@ -226,23 +236,15 @@
         const timeout = setTimeout(() => controller.abort(), 25000);
 
         try {
-          const requestUrl = makeUrl(IESO_REPORT_URL);
-          const response = await fetch(requestUrl, {
+          const response = await fetch(makeUrl(IESO_REPORT_URL), {
             signal: controller.signal,
             cache: "no-store"
           });
-
           clearTimeout(timeout);
 
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
           const xmlText = await response.text();
-          if (!xmlText || xmlText.length < 500) {
-            throw new Error("Empty or truncated response");
-          }
-
           const parsed = parseCapabilityReport(xmlText);
 
           renderFuelOutput(parsed.fuels);
@@ -262,19 +264,17 @@
             `${Math.round(parsed.totalMW).toLocaleString()} MW (${utilization}%)`;
 
           document.getElementById("timestampText").textContent =
-            `Report: ${parsed.deliveryDate} · Hour ${parsed.deliveryHour}`;
+            `Report: ${parsed.deliveryDate} · Hour Ending ${parsed.deliveryHour}`;
 
           badge.textContent = "IESO REPORT CONNECTED";
           badge.className =
             "text-[10px] font-bold bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 px-2 py-0.5 rounded-full";
 
-          if (isLiveMode) {
-            evaluateAlarmState(utilization, parsed.totalMW);
-          }
+          if (isLiveMode) evaluateAlarmState(utilization, parsed.totalMW);
 
           refreshButton.disabled = false;
           refreshButton.classList.remove("opacity-50", "cursor-not-allowed");
-          return; // success
+          return;
         } catch (error) {
           clearTimeout(timeout);
           lastError = error;
@@ -283,8 +283,6 @@
       }
 
       // All proxies failed
-      console.warn("All IESO fetch attempts failed:", lastError);
-
       badge.textContent = "IESO UNAVAILABLE";
       badge.className =
         "text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded-full";
@@ -301,26 +299,12 @@
       document.getElementById("timestampText").textContent = "Report: unavailable";
       document.getElementById("flowValueText").textContent = "Unavailable";
 
-      if (isLiveMode) {
-        evaluateAlarmState(null, null);
-      }
+      if (isLiveMode) evaluateAlarmState(null, null);
 
       refreshButton.disabled = false;
       refreshButton.classList.remove("opacity-50", "cursor-not-allowed");
     }
 
-    /**
-     * Parse GenOutputCapability report.
-     * Structure (simplified):
-     *   <Date>2026-11-02</Date>
-     *   <Generator>
-     *     <FuelType>NUCLEAR</FuelType>
-     *     <Outputs>
-     *       <Output><Hour>19</Hour><EnergyMW>750</EnergyMW></Output>
-     *       ...
-     *     </Outputs>
-     *   </Generator>
-     */
     function parseCapabilityReport(xmlText) {
       const parser = new DOMParser();
       const xml = parser.parseFromString(xmlText, "text/xml");
@@ -334,55 +318,61 @@
           (n) => n.localName === name || n.tagName === name
         );
 
+      if (!byLocal(xml, "Generator").length) {
+        throw new Error("No generator data found");
+      }
+
       const dateNode = byLocal(xml, "Date")[0];
       const deliveryDate = dateNode?.textContent?.trim() || "Unknown";
 
-      // Collect EnergyMW by hour + fuel
       const hourTotals = {}; // hour -> { fuel -> MW }
-      let maxHour = 0;
 
       byLocal(xml, "Generator").forEach((gen) => {
         const fuelNode = byLocal(gen, "FuelType")[0];
         const fuel = (fuelNode?.textContent || "UNKNOWN").trim().toUpperCase();
 
         byLocal(gen, "Output").forEach((out) => {
-          // Only the ones that are direct children of Outputs (ignore Capability)
-          const parent = out.parentElement;
-          if (!parent || (parent.localName !== "Outputs" && parent.tagName !== "Outputs")) {
-            return;
-          }
+          const parent = out.parentNode || out.parentElement;
+          if (!parent) return;
+          const parentName = parent.localName || parent.tagName;
+          if (parentName !== "Outputs") return;
 
           const hourNode = byLocal(out, "Hour")[0];
           const energyNode = byLocal(out, "EnergyMW")[0];
-
           if (!hourNode || !energyNode) return;
 
           const hour = parseInt(hourNode.textContent, 10);
           const mw = parseFloat(energyNode.textContent);
-
           if (!Number.isFinite(hour) || !Number.isFinite(mw) || mw < 0) return;
 
           if (!hourTotals[hour]) hourTotals[hour] = {};
           hourTotals[hour][fuel] = (hourTotals[hour][fuel] || 0) + mw;
-          if (hour > maxHour) maxHour = hour;
         });
       });
 
-      if (maxHour === 0 || !hourTotals[maxHour]) {
+      const availableHours = Object.keys(hourTotals)
+        .map(Number)
+        .sort((a, b) => b - a);
+
+      // Prefer the most recent hour that has a reasonable number of fuel types
+      // (avoids partial hours that are still being published)
+      const selectedHour =
+        availableHours.find((h) => Object.keys(hourTotals[h]).length >= 4) ||
+        availableHours[0];
+
+      if (selectedHour == null) {
         throw new Error("No usable hourly output data found");
       }
 
-      const fuels = hourTotals[maxHour];
+      const fuels = hourTotals[selectedHour];
       let totalMW = 0;
       Object.values(fuels).forEach((v) => (totalMW += v));
 
-      if (totalMW <= 0) {
-        throw new Error("Total output is zero");
-      }
+      if (totalMW <= 0) throw new Error("Total output is zero");
 
       return {
         deliveryDate,
-        deliveryHour: String(maxHour),
+        deliveryHour: String(selectedHour),
         fuels,
         totalMW
       };
@@ -418,19 +408,19 @@
       const labels = Object.keys(fuels);
       const values = Object.values(fuels).map((v) => Math.round(v));
 
-      const colours = [
-        "#34d399", "#60a5fa", "#fbbf24", "#f87171",
-        "#a78bfa", "#fb923c", "#2dd4bf", "#e879f9"
-      ];
-
       chart.data.labels = labels;
       chart.data.datasets[0].data = values;
-      chart.data.datasets[0].backgroundColor = labels.map((_, i) => colours[i % colours.length]);
+      chart.data.datasets[0].backgroundColor = labels.map(
+        (fuel) => FUEL_COLOURS[fuel] || "#64748b"
+      );
       chart.update();
     }
 
     function initChart() {
-      const ctx = document.getElementById("generationChart").getContext("2d");
+      const canvas = document.getElementById("generationChart");
+      if (!canvas) return;
+
+      const ctx = canvas.getContext("2d");
       chart = new Chart(ctx, {
         type: "doughnut",
         data: {
@@ -527,12 +517,12 @@
       if (!audioEnabled || !audioContext || flatlineOscillator) return;
       try {
         flatlineOscillator = audioContext.createOscillator();
-        const gain = audioContext.createGain();
+        flatlineGain = audioContext.createGain();
         flatlineOscillator.type = "sine";
         flatlineOscillator.frequency.setValueAtTime(520, audioContext.currentTime);
-        gain.gain.setValueAtTime(0.06, audioContext.currentTime);
-        flatlineOscillator.connect(gain);
-        gain.connect(audioContext.destination);
+        flatlineGain.gain.setValueAtTime(0.06, audioContext.currentTime);
+        flatlineOscillator.connect(flatlineGain);
+        flatlineGain.connect(audioContext.destination);
         flatlineOscillator.start();
       } catch {}
     }
@@ -542,6 +532,10 @@
       try {
         flatlineOscillator.stop();
         flatlineOscillator.disconnect();
+        if (flatlineGain) {
+          flatlineGain.disconnect();
+          flatlineGain = null;
+        }
       } catch {}
       flatlineOscillator = null;
     }
@@ -574,42 +568,44 @@
         dot.className = "w-3.5 h-3.5 rounded-full bg-slate-500";
         title.textContent = "IESO report unavailable";
         description.textContent =
-          "No current generator-output value is available. No simulated grid status is displayed.";
+          "No current generator-output value is available.";
         badge.className =
           "px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-slate-800 text-slate-300 border border-slate-700";
         badge.textContent = "Unavailable";
         return;
       }
 
-      if (percent >= 85) {
+      // Realistic thresholds for Ontario installed-capacity ratio
+      if (percent >= 40) {
         banner.classList.add("bg-emerald-950/40", "border-emerald-800/60", "text-emerald-200");
         dot.className = "w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-lg shadow-emerald-500/50";
-        title.textContent = `Ontario generator output: ${outputLabel}`;
-        description.textContent = "Output is at or above 85% of the fixed reference capacity.";
+        title.textContent = `Generation output monitor: ${outputLabel}`;
+        description.textContent =
+          "Installed-capacity ratio is at or above 40% (typical operating range).";
         badge.className =
           "px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-emerald-900/80 text-emerald-300 border border-emerald-700/50";
         badge.textContent = "Normal";
-      } else if (percent >= 65) {
+      } else if (percent >= 25) {
         banner.classList.add("bg-yellow-950/40", "border-yellow-800/60", "text-yellow-200");
         dot.className = "w-3.5 h-3.5 rounded-full bg-yellow-400 shadow-lg shadow-yellow-500/50";
-        title.textContent = `Ontario generator output: ${outputLabel}`;
+        title.textContent = `Capacity utilization advisory: ${outputLabel}`;
         description.textContent =
-          "Output is below 85% of reference capacity. Test alarm: one beep every five seconds.";
+          "Installed-capacity ratio is 25–39%. Test alarm: one beep every five seconds.";
         badge.className =
           "px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-yellow-900/80 text-yellow-300 border border-yellow-700/50";
-        badge.textContent = "Below reference";
+        badge.textContent = "Advisory";
         playBeep(440);
         alarmInterval = setInterval(() => playBeep(440), 5000);
-      } else if (percent > 0) {
+      } else if (percent >= 10) {
         banner.classList.add("bg-orange-950/40", "border-orange-800/60", "text-orange-200");
         dot.className =
           "w-3.5 h-3.5 rounded-full bg-orange-400 shadow-lg shadow-orange-500/50 animate-pulse-fast";
-        title.textContent = `Low output test alert: ${outputLabel}`;
+        title.textContent = `Low reference utilization: ${outputLabel}`;
         description.textContent =
-          "Output is below 65% of reference capacity. Test alarm: rapid beeps.";
+          "Installed-capacity ratio is 10–24%. Test alarm: rapid beeps.";
         badge.className =
           "px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-orange-900/80 text-orange-300 border border-orange-700/50";
-        badge.textContent = "Low output";
+        badge.textContent = "Low utilization";
         const rapidBeep = () => {
           playBeep(580, 0.1);
           setTimeout(() => playBeep(580, 0.1), 150);
@@ -620,12 +616,12 @@
         banner.classList.add("bg-red-950/60", "border-red-800", "text-red-200", "animate-pulse");
         dot.className =
           "w-3.5 h-3.5 rounded-full bg-red-500 shadow-lg shadow-red-500/80 animate-pulse-fast";
-        title.textContent = "Zero-output test alert";
+        title.textContent = `Near-zero utilization test: ${outputLabel}`;
         description.textContent =
-          "Test override is at 0%. This does not indicate an actual Ontario grid failure.";
+          "Test override is below 10%. This does not indicate an actual Ontario grid failure.";
         badge.className =
           "px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-red-900 text-red-300 border border-red-700";
-        badge.textContent = "Test: zero output";
+        badge.textContent = "Near zero";
         startFlatline();
       }
     }
