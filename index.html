@@ -181,10 +181,15 @@
   </main>
 
   <script>
-    // Public proxy for local experimentation. Replace with your own backend in production.
-    const PROXY_BASE = "https://api.allorigins.win/raw?url=";
+    // Smaller, hourly-updated report (today's data)
     const IESO_REPORT_URL =
-      "https://reports-public.ieso.ca/public/GenOutputbyFuelHourly/PUB_GenOutputbyFuelHourly.xml";
+      "https://reports-public.ieso.ca/public/GenOutputCapability/PUB_GenOutputCapability.xml";
+
+    // Try these proxies in order
+    const PROXIES = [
+      (url) => `https://proxy.cors.dev/${url}`,
+      (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+    ];
 
     const REFERENCE_CAPACITY_GW = 38.2;
 
@@ -200,7 +205,7 @@
     document.addEventListener("DOMContentLoaded", () => {
       initChart();
       fetchIESOData();
-      setInterval(fetchIESOData, 10 * 60 * 1000); // refresh every 10 minutes
+      setInterval(fetchIESOData, 10 * 60 * 1000);
     });
 
     async function fetchIESOData() {
@@ -214,155 +219,173 @@
       refreshButton.disabled = true;
       refreshButton.classList.add("opacity-50", "cursor-not-allowed");
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 45000); // large yearly file
+      let lastError = null;
 
-      try {
-        const requestUrl = PROXY_BASE + encodeURIComponent(IESO_REPORT_URL);
-        const response = await fetch(requestUrl, {
-          signal: controller.signal,
-          cache: "no-store"
-        });
+      for (const makeUrl of PROXIES) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 25000);
 
-        clearTimeout(timeout);
+        try {
+          const requestUrl = makeUrl(IESO_REPORT_URL);
+          const response = await fetch(requestUrl, {
+            signal: controller.signal,
+            cache: "no-store"
+          });
 
-        if (!response.ok) {
-          throw new Error(`IESO/proxy HTTP ${response.status}`);
+          clearTimeout(timeout);
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const xmlText = await response.text();
+          if (!xmlText || xmlText.length < 500) {
+            throw new Error("Empty or truncated response");
+          }
+
+          const parsed = parseCapabilityReport(xmlText);
+
+          renderFuelOutput(parsed.fuels);
+          updateChart(parsed.fuels);
+
+          currentOutputMW = parsed.totalMW;
+          document.getElementById("totalOutputText").textContent =
+            `${Math.round(parsed.totalMW).toLocaleString()} MW`;
+
+          const utilization = Math.min(
+            100,
+            Math.round((parsed.totalMW / 1000 / REFERENCE_CAPACITY_GW) * 100)
+          );
+          document.getElementById("utilizationText").textContent = `${utilization}%`;
+          document.getElementById("flowSlider").value = utilization;
+          document.getElementById("flowValueText").textContent =
+            `${Math.round(parsed.totalMW).toLocaleString()} MW (${utilization}%)`;
+
+          document.getElementById("timestampText").textContent =
+            `Report: ${parsed.deliveryDate} · Hour ${parsed.deliveryHour}`;
+
+          badge.textContent = "IESO REPORT CONNECTED";
+          badge.className =
+            "text-[10px] font-bold bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 px-2 py-0.5 rounded-full";
+
+          if (isLiveMode) {
+            evaluateAlarmState(utilization, parsed.totalMW);
+          }
+
+          refreshButton.disabled = false;
+          refreshButton.classList.remove("opacity-50", "cursor-not-allowed");
+          return; // success
+        } catch (error) {
+          clearTimeout(timeout);
+          lastError = error;
+          console.warn("Proxy attempt failed:", error.message);
         }
-
-        const xmlText = await response.text();
-        const parsed = parseIesoReport(xmlText);
-
-        renderFuelOutput(parsed.fuels);
-        updateChart(parsed.fuels);
-
-        currentOutputMW = parsed.totalMW;
-        document.getElementById("totalOutputText").textContent =
-          `${Math.round(parsed.totalMW).toLocaleString()} MW`;
-
-        const utilization = Math.min(
-          100,
-          Math.round((parsed.totalMW / 1000 / REFERENCE_CAPACITY_GW) * 100)
-        );
-        document.getElementById("utilizationText").textContent = `${utilization}%`;
-        document.getElementById("flowSlider").value = utilization;
-        document.getElementById("flowValueText").textContent =
-          `${Math.round(parsed.totalMW).toLocaleString()} MW (${utilization}%)`;
-
-        document.getElementById("timestampText").textContent =
-          `Report: ${parsed.deliveryDate} · Hour ${parsed.deliveryHour}`;
-
-        badge.textContent = "IESO REPORT CONNECTED";
-        badge.className =
-          "text-[10px] font-bold bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 px-2 py-0.5 rounded-full";
-
-        if (isLiveMode) {
-          evaluateAlarmState(utilization, parsed.totalMW);
-        }
-      } catch (error) {
-        clearTimeout(timeout);
-        console.warn("IESO report fetch failed:", error);
-
-        const timedOut = error.name === "AbortError";
-        badge.textContent = timedOut ? "IESO REQUEST TIMEOUT" : "IESO UNAVAILABLE";
-        badge.className =
-          "text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded-full";
-
-        container.innerHTML = "";
-        const notice = document.createElement("p");
-        notice.className = "text-amber-300 italic";
-        notice.textContent =
-          "IESO report could not be retrieved. No simulated generation values are shown.";
-        container.appendChild(notice);
-
-        document.getElementById("totalOutputText").textContent = "-- MW";
-        document.getElementById("utilizationText").textContent = "--%";
-        document.getElementById("timestampText").textContent = "Report: unavailable";
-        document.getElementById("flowValueText").textContent = "Unavailable";
-
-        if (isLiveMode) {
-          evaluateAlarmState(null, null);
-        }
-      } finally {
-        refreshButton.disabled = false;
-        refreshButton.classList.remove("opacity-50", "cursor-not-allowed");
       }
+
+      // All proxies failed
+      console.warn("All IESO fetch attempts failed:", lastError);
+
+      badge.textContent = "IESO UNAVAILABLE";
+      badge.className =
+        "text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded-full";
+
+      container.innerHTML = "";
+      const notice = document.createElement("p");
+      notice.className = "text-amber-300 italic";
+      notice.textContent =
+        "IESO report could not be retrieved. No simulated generation values are shown.";
+      container.appendChild(notice);
+
+      document.getElementById("totalOutputText").textContent = "-- MW";
+      document.getElementById("utilizationText").textContent = "--%";
+      document.getElementById("timestampText").textContent = "Report: unavailable";
+      document.getElementById("flowValueText").textContent = "Unavailable";
+
+      if (isLiveMode) {
+        evaluateAlarmState(null, null);
+      }
+
+      refreshButton.disabled = false;
+      refreshButton.classList.remove("opacity-50", "cursor-not-allowed");
     }
 
     /**
-     * Parse the real IESO GenOutputbyFuelHourly schema.
-     * Structure:
-     *   <DailyData>
-     *     <Day>YYYY-MM-DD</Day>
-     *     <HourlyData>
-     *       <Hour>1..24</Hour>
-     *       <FuelTotal>
-     *         <Fuel>NUCLEAR</Fuel>
-     *         <EnergyValue><Output>1234</Output></EnergyValue>
-     *       </FuelTotal>
+     * Parse GenOutputCapability report.
+     * Structure (simplified):
+     *   <Date>2026-11-02</Date>
+     *   <Generator>
+     *     <FuelType>NUCLEAR</FuelType>
+     *     <Outputs>
+     *       <Output><Hour>19</Hour><EnergyMW>750</EnergyMW></Output>
      *       ...
-     *     </HourlyData>
-     *   </DailyData>
+     *     </Outputs>
+     *   </Generator>
      */
-    function parseIesoReport(xmlText) {
+    function parseCapabilityReport(xmlText) {
       const parser = new DOMParser();
       const xml = parser.parseFromString(xmlText, "text/xml");
 
       if (xml.getElementsByTagName("parsererror").length) {
-        throw new Error("IESO returned invalid XML");
+        throw new Error("Invalid XML");
       }
 
-      // Namespace-agnostic tag lookup
-      const byLocalName = (root, name) =>
+      const byLocal = (root, name) =>
         Array.from(root.getElementsByTagName("*")).filter(
           (n) => n.localName === name || n.tagName === name
         );
 
-      const dailyBlocks = byLocalName(xml, "DailyData");
-      if (!dailyBlocks.length) {
-        throw new Error("No DailyData elements found");
-      }
+      const dateNode = byLocal(xml, "Date")[0];
+      const deliveryDate = dateNode?.textContent?.trim() || "Unknown";
 
-      // Use the most recent day that contains hourly data
-      const lastDay = dailyBlocks[dailyBlocks.length - 1];
-      const dayNode = byLocalName(lastDay, "Day")[0];
-      const deliveryDate = dayNode?.textContent?.trim() || "Unknown date";
+      // Collect EnergyMW by hour + fuel
+      const hourTotals = {}; // hour -> { fuel -> MW }
+      let maxHour = 0;
 
-      const hourlyBlocks = byLocalName(lastDay, "HourlyData");
-      if (!hourlyBlocks.length) {
-        throw new Error("No HourlyData elements found");
-      }
+      byLocal(xml, "Generator").forEach((gen) => {
+        const fuelNode = byLocal(gen, "FuelType")[0];
+        const fuel = (fuelNode?.textContent || "UNKNOWN").trim().toUpperCase();
 
-      // Latest hour of that day
-      const lastHourBlock = hourlyBlocks[hourlyBlocks.length - 1];
-      const hourNode = byLocalName(lastHourBlock, "Hour")[0];
-      const deliveryHour = hourNode?.textContent?.trim() || "--";
+        byLocal(gen, "Output").forEach((out) => {
+          // Only the ones that are direct children of Outputs (ignore Capability)
+          const parent = out.parentElement;
+          if (!parent || (parent.localName !== "Outputs" && parent.tagName !== "Outputs")) {
+            return;
+          }
 
-      const fuels = {};
-      let totalMW = 0;
+          const hourNode = byLocal(out, "Hour")[0];
+          const energyNode = byLocal(out, "EnergyMW")[0];
 
-      byLocalName(lastHourBlock, "FuelTotal").forEach((ft) => {
-        const fuelNode = byLocalName(ft, "Fuel")[0];
-        const fuelName = (fuelNode?.textContent || "UNKNOWN").trim().toUpperCase();
+          if (!hourNode || !energyNode) return;
 
-        // Output lives under EnergyValue > Output
-        const outputNode =
-          byLocalName(ft, "Output")[0] ||
-          byLocalName(ft, "OUTPUT")[0];
+          const hour = parseInt(hourNode.textContent, 10);
+          const mw = parseFloat(energyNode.textContent);
 
-        const outputMW = Number.parseFloat(outputNode?.textContent ?? "NaN");
+          if (!Number.isFinite(hour) || !Number.isFinite(mw) || mw < 0) return;
 
-        if (Number.isFinite(outputMW) && outputMW >= 0) {
-          fuels[fuelName] = (fuels[fuelName] || 0) + outputMW;
-          totalMW += outputMW;
-        }
+          if (!hourTotals[hour]) hourTotals[hour] = {};
+          hourTotals[hour][fuel] = (hourTotals[hour][fuel] || 0) + mw;
+          if (hour > maxHour) maxHour = hour;
+        });
       });
 
-      if (!Object.keys(fuels).length || totalMW <= 0) {
-        throw new Error("IESO report contained no usable output values");
+      if (maxHour === 0 || !hourTotals[maxHour]) {
+        throw new Error("No usable hourly output data found");
       }
 
-      return { deliveryDate, deliveryHour, fuels, totalMW };
+      const fuels = hourTotals[maxHour];
+      let totalMW = 0;
+      Object.values(fuels).forEach((v) => (totalMW += v));
+
+      if (totalMW <= 0) {
+        throw new Error("Total output is zero");
+      }
+
+      return {
+        deliveryDate,
+        deliveryHour: String(maxHour),
+        fuels,
+        totalMW
+      };
     }
 
     function renderFuelOutput(fuels) {
@@ -393,9 +416,8 @@
       if (!chart) return;
 
       const labels = Object.keys(fuels);
-      const values = Object.values(fuels).map((value) => Math.round(value));
+      const values = Object.values(fuels).map((v) => Math.round(v));
 
-      // Simple colour palette
       const colours = [
         "#34d399", "#60a5fa", "#fbbf24", "#f87171",
         "#a78bfa", "#fb923c", "#2dd4bf", "#e879f9"
@@ -408,9 +430,8 @@
     }
 
     function initChart() {
-      const context = document.getElementById("generationChart").getContext("2d");
-
-      chart = new Chart(context, {
+      const ctx = document.getElementById("generationChart").getContext("2d");
+      chart = new Chart(ctx, {
         type: "doughnut",
         data: {
           labels: ["Awaiting IESO report"],
@@ -444,8 +465,7 @@
 
     function manualOverridePercent(value) {
       isLiveMode = false;
-
-      const percent = Number.parseInt(value, 10);
+      const percent = parseInt(value, 10);
       const testMW = Math.round((percent / 100) * REFERENCE_CAPACITY_GW * 1000);
 
       document.getElementById("totalOutputText").textContent =
@@ -465,13 +485,9 @@
 
     function toggleAudio() {
       audioContext ??= new (window.AudioContext || window.webkitAudioContext)();
-
-      if (audioContext.state === "suspended") {
-        audioContext.resume();
-      }
+      if (audioContext.state === "suspended") audioContext.resume();
 
       audioEnabled = !audioEnabled;
-
       const button = document.getElementById("audioToggleBtn");
       const label = document.getElementById("audioBtnText");
 
@@ -480,7 +496,7 @@
           "px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-xs font-semibold text-white";
         label.textContent = "Audio Active";
         evaluateAlarmState(
-          Number.parseInt(document.getElementById("flowSlider").value, 10),
+          parseInt(document.getElementById("flowSlider").value, 10),
           currentOutputMW
         );
       } else {
@@ -493,59 +509,40 @@
 
     function playBeep(frequency = 440, duration = 0.15) {
       if (!audioEnabled || !audioContext) return;
-
       try {
-        const oscillator = audioContext.createOscillator();
+        const osc = audioContext.createOscillator();
         const gain = audioContext.createGain();
-
-        oscillator.type = "sine";
-        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
-
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(frequency, audioContext.currentTime);
         gain.gain.setValueAtTime(0.08, audioContext.currentTime);
-        gain.gain.exponentialRampToValueAtTime(
-          0.001,
-          audioContext.currentTime + duration
-        );
-
-        oscillator.connect(gain);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+        osc.connect(gain);
         gain.connect(audioContext.destination);
-
-        oscillator.start();
-        oscillator.stop(audioContext.currentTime + duration);
-      } catch {
-        // Ignore audio errors
-      }
+        osc.start();
+        osc.stop(audioContext.currentTime + duration);
+      } catch {}
     }
 
     function startFlatline() {
       if (!audioEnabled || !audioContext || flatlineOscillator) return;
-
       try {
         flatlineOscillator = audioContext.createOscillator();
         const gain = audioContext.createGain();
-
         flatlineOscillator.type = "sine";
         flatlineOscillator.frequency.setValueAtTime(520, audioContext.currentTime);
         gain.gain.setValueAtTime(0.06, audioContext.currentTime);
-
         flatlineOscillator.connect(gain);
         gain.connect(audioContext.destination);
         flatlineOscillator.start();
-      } catch {
-        // Ignore audio errors
-      }
+      } catch {}
     }
 
     function stopFlatline() {
       if (!flatlineOscillator) return;
-
       try {
         flatlineOscillator.stop();
         flatlineOscillator.disconnect();
-      } catch {
-        // Ignore audio errors
-      }
-
+      } catch {}
       flatlineOscillator = null;
     }
 
@@ -570,9 +567,7 @@
         "p-4 rounded-2xl border flex items-center justify-between transition";
 
       const outputLabel =
-        outputMW === null
-          ? "unavailable"
-          : `${Math.round(outputMW).toLocaleString()} MW`;
+        outputMW === null ? "unavailable" : `${Math.round(outputMW).toLocaleString()} MW`;
 
       if (percent === null) {
         banner.classList.add("bg-slate-900", "border-slate-700", "text-slate-200");
@@ -587,42 +582,26 @@
       }
 
       if (percent >= 85) {
-        banner.classList.add(
-          "bg-emerald-950/40",
-          "border-emerald-800/60",
-          "text-emerald-200"
-        );
-        dot.className =
-          "w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-lg shadow-emerald-500/50";
+        banner.classList.add("bg-emerald-950/40", "border-emerald-800/60", "text-emerald-200");
+        dot.className = "w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-lg shadow-emerald-500/50";
         title.textContent = `Ontario generator output: ${outputLabel}`;
-        description.textContent =
-          "Output is at or above 85% of the fixed reference capacity.";
+        description.textContent = "Output is at or above 85% of the fixed reference capacity.";
         badge.className =
           "px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-emerald-900/80 text-emerald-300 border border-emerald-700/50";
         badge.textContent = "Normal";
       } else if (percent >= 65) {
-        banner.classList.add(
-          "bg-yellow-950/40",
-          "border-yellow-800/60",
-          "text-yellow-200"
-        );
-        dot.className =
-          "w-3.5 h-3.5 rounded-full bg-yellow-400 shadow-lg shadow-yellow-500/50";
+        banner.classList.add("bg-yellow-950/40", "border-yellow-800/60", "text-yellow-200");
+        dot.className = "w-3.5 h-3.5 rounded-full bg-yellow-400 shadow-lg shadow-yellow-500/50";
         title.textContent = `Ontario generator output: ${outputLabel}`;
         description.textContent =
           "Output is below 85% of reference capacity. Test alarm: one beep every five seconds.";
         badge.className =
           "px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-yellow-900/80 text-yellow-300 border border-yellow-700/50";
         badge.textContent = "Below reference";
-
         playBeep(440);
         alarmInterval = setInterval(() => playBeep(440), 5000);
       } else if (percent > 0) {
-        banner.classList.add(
-          "bg-orange-950/40",
-          "border-orange-800/60",
-          "text-orange-200"
-        );
+        banner.classList.add("bg-orange-950/40", "border-orange-800/60", "text-orange-200");
         dot.className =
           "w-3.5 h-3.5 rounded-full bg-orange-400 shadow-lg shadow-orange-500/50 animate-pulse-fast";
         title.textContent = `Low output test alert: ${outputLabel}`;
@@ -631,21 +610,14 @@
         badge.className =
           "px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-orange-900/80 text-orange-300 border border-orange-700/50";
         badge.textContent = "Low output";
-
         const rapidBeep = () => {
           playBeep(580, 0.1);
           setTimeout(() => playBeep(580, 0.1), 150);
         };
-
         rapidBeep();
         alarmInterval = setInterval(rapidBeep, 1500);
       } else {
-        banner.classList.add(
-          "bg-red-950/60",
-          "border-red-800",
-          "text-red-200",
-          "animate-pulse"
-        );
+        banner.classList.add("bg-red-950/60", "border-red-800", "text-red-200", "animate-pulse");
         dot.className =
           "w-3.5 h-3.5 rounded-full bg-red-500 shadow-lg shadow-red-500/80 animate-pulse-fast";
         title.textContent = "Zero-output test alert";
@@ -654,7 +626,6 @@
         badge.className =
           "px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-red-900 text-red-300 border border-red-700";
         badge.textContent = "Test: zero output";
-
         startFlatline();
       }
     }
